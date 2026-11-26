@@ -20,6 +20,13 @@ jobs:
       ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
       ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
     steps:
+      - name: Check required secrets
+        run: |
+          missing=""
+          for v in DB_SERVER DB_NAME DB_USER DB_PASSWORD ADMIN_EMAIL ADMIN_PASSWORD; do
+            if [ -z "${!v}" ]; then missing="$missing $v"; fi
+          done
+          if [ -n "$missing" ]; then echo "::error::Missing GitHub secrets:$missing"; exit 1; fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
