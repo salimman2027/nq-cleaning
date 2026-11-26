@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -48,8 +50,16 @@ export function createApp(): express.Express {
   api.use('/branches', authenticate, branchesRouter);
   api.use((_req, _res, next) => next(new HttpError(404, 'NOT_FOUND', 'Route not found')));
 
-  app.use('/api', api);
+  // Docs must be mounted before the API router, whose catch-all 404 would otherwise swallow /api/docs.
   app.use('/api/docs', helmet({ contentSecurityPolicy: false }), swaggerUi.serve, swaggerUi.setup(openapi));
+  app.use('/api', api);
+  // Single-site deployment (e.g. MonsterASP): serve the built web app from the same origin as the API.
+  const webDir = process.env.FRONTEND_DIR ? path.resolve(process.env.FRONTEND_DIR) : path.resolve(__dirname, '..', 'frontend');
+  if (existsSync(path.join(webDir, 'index.html'))) {
+    app.use(express.static(webDir, { index: false, maxAge: '1h' }));
+    app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(path.join(webDir, 'index.html')));
+  }
+
   app.use(errorHandler);
   return app;
 }

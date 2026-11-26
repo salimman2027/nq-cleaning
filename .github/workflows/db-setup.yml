@@ -1,0 +1,28 @@
+name: Database setup (migrate + first admin)
+
+# Runs from GitHub against your hosted SQL Server (remote access must be enabled on the host).
+# Add these in Settings > Secrets and variables > Actions > Secrets:
+#   DB_SERVER, DB_NAME, DB_USER, DB_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD (12+ chars)
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    env:
+      DB_SERVER: ${{ secrets.DB_SERVER }}
+      DB_PORT: "1433"
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_ENCRYPT: "true"
+      DB_TRUST_SERVER_CERT: "true"
+      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --workspace backend --include-workspace-root=false
+      - run: npm run migrate -w backend
+      - run: npm run bootstrap -w backend

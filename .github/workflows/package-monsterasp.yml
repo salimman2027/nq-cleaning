@@ -1,0 +1,35 @@
+name: Package for MonsterASP
+
+# Builds a ready-to-upload ZIP. The host has no shell and cannot run npm,
+# so production node_modules are installed here and shipped inside the ZIP.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["backend/**", "frontend/**", "deploy/**", ".github/workflows/package-monsterasp.yml"]
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install
+      - run: npm run build
+      - name: Assemble site folder
+        run: |
+          mkdir -p stage/dist stage/frontend
+          cp -r backend/dist/. stage/dist/
+          cp -r frontend/dist/. stage/frontend/
+          cp deploy/monsterasp/web.config deploy/monsterasp/server.js stage/
+          node -e "const p=require('./backend/package.json');require('fs').writeFileSync('stage/package.json',JSON.stringify({name:'nq-cleaning',version:p.version,private:true,main:'server.js',dependencies:p.dependencies},null,2))"
+          (cd stage && npm install --omit=dev --no-audit --no-fund)
+          node -e "require('./stage/node_modules/express');require('./stage/node_modules/mssql');require('./stage/node_modules/bcryptjs');console.log('runtime deps resolve')"
+          (cd stage && zip -qr ../nq-cleaning-monsterasp.zip .)
+          ls -la nq-cleaning-monsterasp.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nq-cleaning-monsterasp
+          path: nq-cleaning-monsterasp.zip
+          if-no-files-found: error

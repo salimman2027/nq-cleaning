@@ -10,6 +10,7 @@
 - [x] هيكل المستودع، `.gitignore`، `.env.example`، docker-compose، Dockerfiles
 - [~] CI: build + test على SQL Server (`ci.yml`)
 - [~] workflow بناء APK (`android-apk.yml`)
+- [~] حزمة نشر MonsterASP (`package-monsterasp.yml`) + إعداد قاعدة البيانات عن بُعد (`db-setup.yml`) — راجع `docs/MONSTERASP.md`
 - [~] Migrations: `001_core.sql`، `002_phase1_ops.sql` (لم تُشغَّل على SQL Server بعد)
 
 ## Phase 1

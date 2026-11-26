@@ -5,13 +5,18 @@ import { config } from '../config';
 
 /** Applies database/migrations/*.sql in order; batches are split on lines containing only GO. */
 export async function migrate(dir = path.resolve(__dirname, '../../../database/migrations')): Promise<string[]> {
-  if (!/^\w+$/.test(config.db.database)) throw new Error('DB_NAME may only contain letters, digits and underscore');
+  if (!/^[\w.-]+$/.test(config.db.database)) throw new Error('DB_NAME may only contain letters, digits, underscore, dot and hyphen');
   const opts = { encrypt: config.db.encrypt, trustServerCertificate: config.db.trustServerCertificate };
   const base = { server: config.db.server, port: config.db.port, user: config.db.user, password: config.db.password, options: opts };
 
-  const master = await new sql.ConnectionPool({ ...base, database: 'master' }).connect();
-  await master.request().query(`IF DB_ID('${config.db.database}') IS NULL CREATE DATABASE [${config.db.database}]`);
-  await master.close();
+  // Shared hosts pre-create the database and deny access to master; only try to create it when possible.
+  try {
+    const master = await new sql.ConnectionPool({ ...base, database: 'master' }).connect();
+    await master.request().query(`IF DB_ID('${config.db.database}') IS NULL CREATE DATABASE [${config.db.database}]`);
+    await master.close();
+  } catch {
+    console.warn('Could not create the database automatically (no access to master); assuming it already exists.');
+  }
 
   const pool = await new sql.ConnectionPool({ ...base, database: config.db.database }).connect();
   const applied: string[] = [];
