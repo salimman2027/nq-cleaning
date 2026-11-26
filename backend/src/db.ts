@@ -35,7 +35,8 @@ export const dt = (d: Date | null): Param => [sql.DateTime2, d];
 
 function bind(r: sql.Request, params: Params): void {
   for (const [k, v] of Object.entries(params)) {
-    if (Array.isArray(v) && v.length === 2 && typeof v[0] === 'function') {
+    // sql.Decimal(18,2) is an object, sql.DateTime2 is a factory function: accept both as an explicit type.
+    if (Array.isArray(v) && v.length === 2 && v[0] && (typeof v[0] === 'function' || typeof v[0] === 'object')) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       r.input(k, v[0] as any, v[1]);
     } else {
