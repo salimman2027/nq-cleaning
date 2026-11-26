@@ -36,9 +36,9 @@ dashboardRouter.get(
          COUNT(CASE WHEN b.StartAt >= @de AND b.StartAt < @tde AND b.Status NOT IN ('cancelled','postponed') THEN 1 END) AS tomorrow,
          COUNT(CASE WHEN b.StartAt < @now AND b.Status IN ('new','awaiting_confirmation','confirmed','awaiting_assignment','assigned') THEN 1 END) AS late,
          COUNT(CASE WHEN b.Status IN ('new','awaiting_confirmation','confirmed','awaiting_assignment')
-                     AND b.StartAt >= @ds
-                     AND NOT EXISTS (SELECT 1 FROM BookingAssignments a WHERE a.BookingId=b.Id AND a.IsActive=1) THEN 1 END) AS unassigned
-       FROM Bookings b WHERE ${base}`,
+                     AND b.StartAt >= @ds AND b.ActiveTechs = 0 THEN 1 END) AS unassigned
+       FROM (SELECT b.*, (SELECT COUNT(*) FROM BookingAssignments a WHERE a.BookingId = b.Id AND a.IsActive = 1) AS ActiveTechs
+               FROM Bookings b WHERE ${base}) b`,
       p,
     );
 

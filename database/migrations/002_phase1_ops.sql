@@ -53,8 +53,8 @@ BEGIN
     JOIN BookingAssignments a ON a.TechnicianId = i.TechnicianId AND a.Id <> i.Id AND a.IsActive = 1
     WHERE i.IsActive = 1 AND a.StartAt < i.EndAt AND a.EndAt > i.StartAt)
   BEGIN
-    RAISERROR('TECHNICIAN_OVERLAP', 16, 1);
     ROLLBACK TRANSACTION;
+    THROW 50001, 'TECHNICIAN_OVERLAP', 1;
   END
 END;
 GO
