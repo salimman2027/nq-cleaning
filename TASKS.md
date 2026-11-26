@@ -1,28 +1,42 @@
 # NQ Cleaning — TASKS
-الحالة: [ ] لم يبدأ · [~] جزئي · [x] مكتمل ومُختبر
+
+الحالة: `[ ]` لم يبدأ · `[~]` مكتوب لكن لم يُجمَّع/يُختبر بعد · `[x]` مكتمل ومُختبر
+
+> **مهم:** لا توجد شبكة في بيئة التطوير التي كُتب فيها الكود، فلم يُنفَّذ `npm install` ولا Build كامل ولا اختبارات التكامل.
+> الوحيد المُختبر فعلياً: اختبارات المنطق الصافي (`backend/src/lib`، 7 اختبارات نجحت).
+> التحقق الحقيقي يتم على GitHub Actions (`ci.yml`) — أي خطأ يظهر هناك يُصلَح أولاً.
 
 ## Phase 0 — الأساس
-- [x] هيكل المستودع، .gitignore، .env.example، docker-compose، CI
-- [~] Migration 001: الجداول الأساسية (كُتبت، لم تُشغَّل على SQL Server بعد)
-- [ ] Backend skeleton (Express + TS + mssql + Zod + Swagger)
-- [ ] Frontend skeleton (Vite + React + TS + Tailwind + i18n RTL/LTR)
+- [x] هيكل المستودع، `.gitignore`، `.env.example`، docker-compose، Dockerfiles
+- [~] CI: build + test على SQL Server (`ci.yml`)
+- [~] workflow بناء APK (`android-apk.yml`)
+- [~] Migrations: `001_core.sql`، `002_phase1_ops.sql` (لم تُشغَّل على SQL Server بعد)
 
-## Phase 1 — Auth, Customers, Services, Staff, Bookings, Scheduling, Dashboard
-- [ ] JWT + Refresh Token Rotation + Argon2
-- [ ] RBAC في الـ Backend + عزل الشركة/الفرع
-- [ ] Customers + Addresses + منع التكرار بالجوال
-- [ ] Services + ServicePrices + Checklists
-- [ ] Supervisors / Technicians / Skills / Leaves / Availability
-- [ ] Bookings + StatusHistory + منع التعارض (Transaction + sp_getapplock)
-- [ ] Dashboard من بيانات فعلية
-- [ ] Seed (3 فروع، 50 عميل، 15 خدمة، 5 مشرفين، 30 فني، 6 فرق، 6 سيارات، 100 حجز)
-- [ ] اختبارات: دورة الحجز، التعارض، الصلاحيات
+## Phase 1
+- [~] Auth: JWT + Refresh Token Rotation + كشف إعادة الاستخدام + bcrypt
+- [~] RBAC داخل Backend (20 صلاحية، 10 أدوار) + عزل الشركة/الفرع
+- [~] Customers + Addresses + تنبيه التكرار بالجوال
+- [~] Services + ServicePrices (أسعار بتواريخ، سعر خاص بنوع العميل)
+- [~] Technicians + الإجازات + التوفر
+- [~] Bookings: إنشاء، تعيين، حالات (15 حالة)، إعادة جدولة، منع التكرار (Idempotency)
+- [~] منع التعارض: applock + فحص زمن الانتقال 30 دقيقة + Trigger على مستوى قاعدة البيانات
+- [~] Dashboard من بيانات فعلية
+- [~] اختبارات تكامل: دورة الحجز، التعارض المتزامن، الصلاحيات، تدوير الـ tokens (`src/integration`)
+- [~] Frontend: دخول، Dashboard، حجوزات، عملاء، فنيون، خدمات، RTL/LTR، داكن، PWA
+- [ ] المشرفون (جدول `Supervisors` موجود، لا API ولا شاشة)
+- [ ] مهارات الفنيين، التوفر الأسبوعي، ساعات العمل
+- [ ] نسخ الحجز، الحجز المتكرر
+- [ ] Seed الكامل (3 فروع، 50 عميل، 15 خدمة، 30 فني، 100 حجز…)
+- [ ] مؤشرات Dashboard: متوسط التقييم، استغلال الساعات، صافي الربح (تُرجَع كـ null وليست أرقاماً مزيفة)
 
-## Phase 2 — PWA, Dispatch, GPS, Quality
-## Phase 3 — Invoices, Payments, Subscriptions, Costing
-## Phase 4 — Portal, WhatsApp, Reports, Deployment
+## Phase 2 — PWA الفني، Dispatch، GPS، الجودة، المرفقات
+- [ ] لم يبدأ (دور Technician لا يملك أي صلاحيات حالياً عمداً)
 
-## ملاحظات
-- لا تكامل ZATCA ولا ادعاء توافق معه.
-- لم يُنفَّذ أي Build أو اختبار حتى الآن (بيئة بلا شبكة).
-- جداول Migration 001 جزء من القائمة الكاملة؛ الباقي في migrations لاحقة.
+## Phase 3 — الفواتير، التحصيلات، الاشتراكات، التكاليف
+- [ ] لم يبدأ. لا يوجد أي ادعاء بالتوافق مع ZATCA.
+
+## Phase 4 — بوابة العميل، WhatsApp، التقارير، النشر
+- [ ] لم يبدأ
+
+## APK
+- [~] Capacitor + workflow على GitHub Actions. يحتاج Backend على HTTPS ومتغير `API_URL` (راجع `docs/APK.md`).

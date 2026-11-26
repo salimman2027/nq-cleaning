@@ -1,0 +1,35 @@
+const bearer = [{ bearerAuth: [] }];
+const op = (summary: string, perm?: string) => ({ summary: perm ? `${summary} (requires ${perm})` : summary, security: bearer, responses: { '200': { description: 'OK' } } });
+
+export const openapi = {
+  openapi: '3.0.3',
+  info: { title: 'NQ Cleaning API', version: '0.1.0' },
+  servers: [{ url: '/api' }],
+  components: { securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } } },
+  paths: {
+    '/health': { get: { summary: 'Health check', responses: { '200': { description: 'OK' } } } },
+    '/auth/login': { post: { summary: 'Sign in; returns access + refresh token', responses: { '200': { description: 'OK' } } } },
+    '/auth/refresh': { post: { summary: 'Rotate refresh token', responses: { '200': { description: 'OK' } } } },
+    '/auth/logout': { post: { summary: 'Revoke refresh token', responses: { '204': { description: 'No content' } } } },
+    '/auth/me': { get: op('Current user and permissions') },
+    '/customers': { get: op('Search customers (q, page, pageSize)', 'customers.view'), post: op('Create customer; 409 DUPLICATE_CUSTOMER unless force=true', 'customers.create') },
+    '/customers/{id}': { get: op('Customer with addresses', 'customers.view'), put: op('Update customer', 'customers.update'), delete: op('Soft delete', 'customers.delete') },
+    '/customers/{id}/addresses': { post: op('Add address', 'customers.update') },
+    '/services': { get: op('List services with current price', 'services.view'), post: op('Create service', 'services.manage') },
+    '/services/{id}': { put: op('Update service', 'services.manage') },
+    '/services/{id}/prices': { post: op('Add price version', 'services.manage') },
+    '/technicians': { get: op('List technicians', 'technicians.view'), post: op('Create technician', 'technicians.manage') },
+    '/technicians/available': { get: op('Technicians free in [start, end)', 'technicians.view') },
+    '/technicians/{id}/status': { patch: op('Set technician status', 'technicians.manage') },
+    '/technicians/{id}/leaves': { post: op('Register leave', 'technicians.manage') },
+    '/bookings': { get: op('List bookings', 'bookings.view'), post: op('Create booking (conflict-checked, idempotent with idempotencyKey)', 'bookings.create') },
+    '/bookings/{id}': { get: op('Booking details, assignments, status history', 'bookings.view') },
+    '/bookings/{id}/assign': { post: op('Assign technicians; 409 TECHNICIAN_CONFLICT on overlap', 'bookings.assign') },
+    '/bookings/{id}/status': { post: op('Change status (state machine, reason where required)', 'bookings.status') },
+    '/bookings/{id}/reschedule': { post: op('Reschedule with conflict re-check', 'bookings.update') },
+    '/dashboard': { get: op('Dashboard indicators computed from live data', 'dashboard.view') },
+    '/users': { get: op('List users', 'users.manage'), post: op('Create user', 'users.manage') },
+    '/users/roles': { get: op('List roles', 'users.manage') },
+    '/users/{id}/active': { patch: op('Activate / deactivate user', 'users.manage') },
+  },
+};

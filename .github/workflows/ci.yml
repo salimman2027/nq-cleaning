@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Ci_Pass_12345!"
+        ports: ["1433:1433"]
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Ci_Pass_12345!' -Q 'SELECT 1'"
+          --health-interval 10s --health-timeout 5s --health-retries 12
+    env:
+      DB_SERVER: localhost
+      DB_PORT: "1433"
+      DB_USER: sa
+      DB_PASSWORD: "Ci_Pass_12345!"
+      DB_ENCRYPT: "true"
+      DB_TRUST_SERVER_CERT: "true"
+      JWT_ACCESS_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+      RUN_INTEGRATION: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install
+      - name: Build (TypeScript)
+        run: npm run build
+      - name: Test (unit + integration on SQL Server)
+        run: npm test

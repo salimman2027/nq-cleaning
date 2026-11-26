@@ -7,12 +7,15 @@ services:
     ports: ["1433:1433"]
     volumes: [dbdata:/var/opt/mssql]
   backend:
-    build: ./backend
+    build: { context: ., dockerfile: backend/Dockerfile }
     env_file: .env
+    environment:
+      DB_SERVER: db
+      DB_USER: sa
     depends_on: [db]
     ports: ["4000:4000"]
   frontend:
-    build: ./frontend
+    build: { context: ., dockerfile: frontend/Dockerfile }
     depends_on: [backend]
     ports: ["8080:80"]
 volumes:

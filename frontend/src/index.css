@@ -1,0 +1,7 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+html, body, #root { height: 100%; }
+body { font-family: system-ui, "Segoe UI", Tahoma, "Noto Sans Arabic", sans-serif; }
+.skeleton { background: linear-gradient(90deg, rgb(148 163 184 / .2), rgb(148 163 184 / .4), rgb(148 163 184 / .2)); background-size: 200% 100%; animation: sk 1.2s infinite; border-radius: .5rem; }
+@keyframes sk { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }

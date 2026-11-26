@@ -1,0 +1,90 @@
+import { Router } from 'express';
+import { dt, query } from '../db';
+import { h } from '../errors';
+import { branchScope, requirePerm } from '../auth/middleware';
+import { riyadhDayRange, riyadhMonthRange } from '../lib/time';
+
+export const dashboardRouter = Router();
+
+/**
+ * Every number comes from the database. Indicators that depend on modules not built yet
+ * (ratings, utilisation, profit) are returned as null instead of invented values.
+ */
+dashboardRouter.get(
+  '/',
+  requirePerm('dashboard.view'),
+  h(async (req, res) => {
+    const u = req.user!;
+    const now = new Date();
+    const day = riyadhDayRange(now);
+    const month = riyadhMonthRange(now);
+    const p = {
+      c: u.companyId, b: branchScope(u), ds: dt(day.start), de: dt(day.end), tde: dt(new Date(day.end.getTime() + 86400000)),
+      ms: dt(month.start), me: dt(month.end), now: dt(now),
+    };
+    const base = `b.CompanyId=@c AND b.IsDeleted=0 AND (@b IS NULL OR b.BranchId=@b)`;
+    const today = `b.StartAt >= @ds AND b.StartAt < @de`;
+
+    const [counts] = await query<Record<string, number>>(
+      `SELECT
+         COUNT(CASE WHEN ${today} THEN 1 END) AS todayTotal,
+         COUNT(CASE WHEN ${today} AND b.Status = 'new' THEN 1 END) AS todayNew,
+         COUNT(CASE WHEN ${today} AND b.Status = 'confirmed' THEN 1 END) AS todayConfirmed,
+         COUNT(CASE WHEN ${today} AND b.Status IN ('on_the_way','arrived','in_progress','paused') THEN 1 END) AS todayInProgress,
+         COUNT(CASE WHEN ${today} AND b.Status IN ('done','closed') THEN 1 END) AS todayDone,
+         COUNT(CASE WHEN ${today} AND b.Status = 'cancelled' THEN 1 END) AS todayCancelled,
+         COUNT(CASE WHEN b.StartAt >= @de AND b.StartAt < @tde AND b.Status NOT IN ('cancelled','postponed') THEN 1 END) AS tomorrow,
+         COUNT(CASE WHEN b.StartAt < @now AND b.Status IN ('new','awaiting_confirmation','confirmed','awaiting_assignment','assigned') THEN 1 END) AS late,
+         COUNT(CASE WHEN b.Status IN ('new','awaiting_confirmation','confirmed','awaiting_assignment')
+                     AND b.StartAt >= @ds
+                     AND NOT EXISTS (SELECT 1 FROM BookingAssignments a WHERE a.BookingId=b.Id AND a.IsActive=1) THEN 1 END) AS unassigned
+       FROM Bookings b WHERE ${base}`,
+      p,
+    );
+
+    const [money] = await query<Record<string, number>>(
+      `SELECT
+         ISNULL(SUM(CASE WHEN b.StartAt >= @ds AND b.StartAt < @de AND b.Status IN ('done','closed') THEN b.Subtotal - b.Discount END), 0) AS revenueToday,
+         ISNULL(SUM(CASE WHEN b.StartAt >= @ms AND b.StartAt < @me AND b.Status IN ('done','closed') THEN b.Subtotal - b.Discount END), 0) AS revenueMonth,
+         ISNULL(SUM(CASE WHEN b.StartAt >= @ms AND b.StartAt < @me AND b.Status <> 'cancelled' THEN b.Paid END), 0) AS collectedMonth,
+         ISNULL(SUM(CASE WHEN b.StartAt >= @ms AND b.StartAt < @me AND b.Status <> 'cancelled' THEN b.Total - b.Paid END), 0) AS outstandingMonth
+       FROM Bookings b WHERE ${base}`,
+      p,
+    );
+
+    const techs = await query<{ Status: string; n: number }>(
+      `SELECT t.Status, COUNT(*) AS n FROM Technicians t WHERE t.CompanyId=@c AND t.IsDeleted=0 AND (@b IS NULL OR t.BranchId=@b) GROUP BY t.Status`,
+      p,
+    );
+    const t = Object.fromEntries(techs.map((r) => [r.Status, Number(r.n)])) as Record<string, number>;
+
+    const topServices = await query(
+      `SELECT TOP 5 s.Name, COUNT(*) AS bookings FROM BookingDetails d
+         JOIN Bookings b ON b.Id=d.BookingId JOIN Services s ON s.Id=d.ServiceId
+        WHERE ${base} AND b.StartAt >= @ms AND b.StartAt < @me AND b.Status <> 'cancelled'
+        GROUP BY s.Name ORDER BY COUNT(*) DESC`,
+      p,
+    );
+    const daily = await query(
+      `SELECT CAST(DATEADD(HOUR, 3, b.StartAt) AS DATE) AS day, COUNT(*) AS bookings
+         FROM Bookings b WHERE ${base} AND b.StartAt >= @ms AND b.StartAt < @me AND b.Status <> 'cancelled'
+        GROUP BY CAST(DATEADD(HOUR, 3, b.StartAt) AS DATE) ORDER BY day`,
+      p,
+    );
+
+    res.json({
+      generatedAt: now.toISOString(),
+      bookings: counts,
+      money,
+      technicians: {
+        available: t.available ?? 0,
+        busy: (t.booked ?? 0) + (t.on_the_way ?? 0) + (t.working ?? 0) + (t.break ?? 0),
+        absent: (t.absent ?? 0) + (t.leave ?? 0),
+        offDuty: t.off_duty ?? 0,
+      },
+      topServices,
+      dailyBookings: daily,
+      notYetAvailable: ['avgRating', 'technicianUtilization', 'operatingProfit', 'supervisorsAvailable'],
+    });
+  }),
+);
