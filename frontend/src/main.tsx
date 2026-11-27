@@ -5,9 +5,12 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App';
 import { AuthProvider } from './auth';
 import { I18nProvider } from './i18n';
+import { ShopProvider } from './shop';
 import './index.css';
+import { applyZoom, savedZoom } from './ui';
 
 registerSW({ immediate: true });
+applyZoom(savedZoom());
 
 try {
   if (localStorage.getItem('nq.dark') === '1') document.documentElement.classList.add('dark');
@@ -18,7 +21,9 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <I18nProvider>
         <AuthProvider>
-          <App />
+          <ShopProvider>
+            <App />
+          </ShopProvider>
         </AuthProvider>
       </I18nProvider>
     </BrowserRouter>

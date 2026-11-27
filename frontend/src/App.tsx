@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Navigate, NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth';
 import { useI18n, type Key } from './i18n';
-import { Skeleton } from './ui';
+import { Skeleton, ZoomControl } from './ui';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Bookings from './pages/Bookings';
@@ -12,6 +12,8 @@ import Services from './pages/Services';
 import Home from './pages/Home';
 import Storefront from './pages/Storefront';
 import Register from './pages/Register';
+import Account from './pages/Account';
+import Cart from './pages/Cart';
 import Categories from './pages/Categories';
 import Requests from './pages/Requests';
 import Company from './pages/Company';
@@ -63,6 +65,7 @@ function Layout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"><span className="text-sm font-medium">{me.FullName} <span className="text-slate-400">·</span> <span className="text-slate-500">{me.CompanyName}</span></span>
                     <div className="flex items-center gap-2 text-sm">
+            <ZoomControl />
             <button onClick={toggleDark} className="rounded-lg border px-3 py-1 dark:border-slate-700">{t('dark')}</button>
             <button onClick={toggle} className="rounded-lg border px-3 py-1 dark:border-slate-700">{t('lang')}</button>
             <button onClick={logout} className="rounded-lg border px-3 py-1 dark:border-slate-700">{t('logout')}</button>
@@ -95,6 +98,8 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/c/:slug" element={<Storefront />} />
+      <Route path="/account" element={<Account />} />
+      <Route path="/cart" element={<Cart />} />
       <Route path="/join" element={me ? <Navigate to="/app" replace /> : <Register />} />
       <Route path="/login" element={me ? <Navigate to="/app" replace /> : <Login />} />
       <Route path="/app" element={<Layout />}>

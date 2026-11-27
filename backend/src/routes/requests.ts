@@ -12,12 +12,26 @@ requestsRouter.get(
   requirePerm('bookings.view'),
   h(async (req, res) => {
     const items = await query(
-      `SELECT r.Id, r.CustomerName, r.Phone, r.Address, r.PreferredDate, r.PreferredPeriod, r.Notes, r.Status, r.CreatedAt, s.Name AS ServiceName
+      `SELECT r.Id, r.PaymentMethod, r.PaymentStatus, r.Total, r.CustomerName, r.Phone, r.Address, r.PreferredDate, r.PreferredPeriod, r.Notes, r.Status, r.CreatedAt, s.Name AS ServiceName
          FROM BookingRequests r JOIN Services s ON s.Id=r.ServiceId
         WHERE r.CompanyId=@c ORDER BY CASE r.Status WHEN 'new' THEN 0 ELSE 1 END, r.CreatedAt DESC`,
       { c: req.user!.companyId },
     );
-    res.json({ items });
+    const ids = items.map((r) => r.Id);
+    const lines = ids.length ? await query(`SELECT RequestId, Name, UnitPrice, Qty FROM BookingRequestItems WHERE RequestId IN (SELECT Id FROM BookingRequests WHERE CompanyId=@c)`, { c: req.user!.companyId }) : [];
+    res.json({ items: items.map((r) => ({ ...r, Items: lines.filter((l) => l.RequestId === r.Id) })) });
+  }),
+);
+
+requestsRouter.patch(
+  '/:id/payment',
+  requirePerm('bookings.update'),
+  h(async (req, res) => {
+    const id = parse(z.coerce.number().int().positive(), req.params.id);
+    const { paymentStatus } = parse(z.object({ paymentStatus: z.enum(['paid', 'unpaid']) }), req.body);
+    const r = await query(`UPDATE BookingRequests SET PaymentStatus=@s, UpdatedAt=SYSUTCDATETIME() OUTPUT inserted.Id WHERE Id=@i AND CompanyId=@c`, { s: paymentStatus, i: id, c: req.user!.companyId });
+    if (!r.length) throw new HttpError(404, 'NOT_FOUND', 'Request not found');
+    res.json({ id, paymentStatus });
   }),
 );
 

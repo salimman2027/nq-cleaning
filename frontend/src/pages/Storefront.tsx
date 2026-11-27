@@ -4,6 +4,7 @@ import { api, ApiError } from '../api';
 import { useI18n, type Key } from '../i18n';
 import { SectorIcon } from '../sectorIcons';
 import { ErrorBox, Modal, money, Skeleton } from '../ui';
+import { useShop } from '../shop';
 import { PublicShell } from './Home';
 
 interface Store {
@@ -63,6 +64,15 @@ export default function Storefront() {
     api<Store>(`/market/companies/${slug}`).then(setS).catch((e) => setError(e instanceof ApiError && e.status === 404 ? t('noCompanies') : 'Error'));
   }, [slug, t]);
   const color = s?.primaryColor ?? '#0f3f8f';
+  const shop = useShop();
+  const [toast, setToast] = useState('');
+  const [conflict, setConflict] = useState<Store['services'][number] | null>(null);
+  const cartItem = (x: Store['services'][number]) => ({ serviceId: x.Id, name: x.Name, price: x.FromPrice ?? 0, image: x.ImageUrl });
+  const addToCart = (x: Store['services'][number]) => {
+    if (x.FromPrice == null) return;
+    if (shop.add(slug!, s!.name, cartItem(x)) === 'other-company') { setConflict(x); return; }
+    setDetail(null); setToast(t('addedToCart')); setTimeout(() => setToast(''), 2200);
+  };
   const [picked, setPicked] = useState('');
   const [detail, setDetail] = useState<Store['services'][number] | null>(null);
   const order = (id: number) => { setDetail(null); setPicked(String(id)); setTimeout(() => document.getElementById('request')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50); };
@@ -165,7 +175,7 @@ export default function Storefront() {
                         <div className="mt-1 h-6 font-bold" style={{ color }}>{x.FromPrice != null && <><span className="me-1 text-xs font-normal text-slate-500">{t('servicesFrom')}</span>{money(x.FromPrice, lang)}</>}</div>
                         <div className="mt-2 flex gap-2">
                           <button onClick={() => setDetail(x)} className="tile flex-1 rounded-full border px-2 py-2 text-sm font-medium" style={{ color, borderColor: color }}>{t('details')}</button>
-                          <button onClick={() => order(x.Id)} className="tile flex-1 rounded-full px-2 py-2 text-sm font-semibold text-white" style={{ background: color }}>{t('orderNow')}</button>
+                          <button onClick={() => addToCart(x)} disabled={x.FromPrice == null} className="tile flex-1 rounded-full px-2 py-2 text-sm font-semibold text-white disabled:opacity-50" style={{ background: color }}>{t('addToCart')}</button>
                         </div>
                       </div>
                     </article>
@@ -183,7 +193,8 @@ export default function Storefront() {
                 {detail.Description && <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">{detail.Description}</p>}
                 {detail.Includes && <><h3 className="mb-1 text-sm font-semibold">{t('includesTitle')}</h3><ul className="mb-3 list-disc space-y-1 ps-5 text-sm">{detail.Includes.split('\n').map((i) => <li key={i}>{i}</li>)}</ul></>}
                 {detail.Notes && <><h3 className="mb-1 text-sm font-semibold">{t('notesTitle')}</h3><p className="mb-3 rounded-lg bg-amber-50 p-2.5 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">{detail.Notes}</p></>}
-                <button onClick={() => order(detail.Id)} className="tile w-full rounded-xl px-4 py-3 font-semibold text-white" style={{ background: color }}>{t('orderNow')}</button>
+                <button onClick={() => addToCart(detail)} disabled={detail.FromPrice == null} className="tile w-full rounded-xl px-4 py-3 font-semibold text-white disabled:opacity-50" style={{ background: color }}>{t('addToCart')}</button>
+                <button onClick={() => order(detail.Id)} className="mt-2 w-full rounded-xl border px-4 py-2.5 text-sm font-medium dark:border-slate-700">{t('orderNow')}</button>
               </Modal>
             )}
             <section className="mb-8 grid gap-3 sm:grid-cols-3">
@@ -197,6 +208,13 @@ export default function Storefront() {
             </section>
             {s.services.length > 0 && <RequestForm store={s} color={color} picked={picked} />}
           </main>
+          {toast && <div role="status" className="rise fixed inset-x-0 bottom-24 z-40 mx-auto w-fit rounded-full bg-slate-900 px-5 py-2.5 text-sm text-white shadow-xl">{toast} · <Link to="/cart" className="underline">{t('cart')}</Link></div>}
+          {conflict && (
+            <Modal title={t('otherCompanyTitle')} onClose={() => setConflict(null)}>
+              <p className="text-sm">{t('otherCompanyText')}</p>
+              <div className="mt-4 flex gap-2"><button className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white" onClick={() => { shop.replaceWith(slug!, s.name, cartItem(conflict)); setConflict(null); setToast(t('addedToCart')); setTimeout(() => setToast(''), 2200); }}>{t('replaceCart')}</button><button className="rounded-lg border px-4 py-2 text-sm" onClick={() => setConflict(null)}>{t('cancel')}</button></div>
+            </Modal>
+          )}
           {s.whatsapp && (
             <a href={`https://wa.me/${s.whatsapp}?text=${encodeURIComponent(`${t('waHello')} ${s.name}`)}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp"
               className="tile fixed bottom-5 start-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#25d366] text-white shadow-xl">

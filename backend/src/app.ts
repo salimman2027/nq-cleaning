@@ -14,6 +14,7 @@ import { customersRouter } from './routes/customers';
 import { servicesRouter } from './routes/services';
 import { techniciansRouter } from './routes/technicians';
 import { bookingsRouter } from './routes/bookings';
+import { shopRouter } from './routes/shop';
 import { mediaRouter } from './routes/media';
 import { requestsRouter } from './routes/requests';
 import { dashboardRouter } from './routes/dashboard';
@@ -55,6 +56,7 @@ export function createApp(): express.Express {
   api.use('/onboarding', onboardingRouter);
   api.use('/market', marketRouter);
   api.use('/media', mediaRouter);
+  api.use('/shop', shopRouter);
   api.use('/company', authenticate, companyRouter);
   api.use('/platform', authenticate, platformRouter);
   api.use('/customers', authenticate, requireApprovedCompany, customersRouter);

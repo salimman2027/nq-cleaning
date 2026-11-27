@@ -88,3 +88,23 @@ export function ImageUpload({ value, onChange, round = false }: { value: string;
     </div>
   );
 }
+
+const ZOOMS = [90, 100, 112, 125, 140];
+export function applyZoom(pct: number): void { document.documentElement.style.fontSize = `${pct}%`; }
+export function savedZoom(): number { try { const v = Number(localStorage.getItem('nq.zoom')); return ZOOMS.includes(v) ? v : 100; } catch { return 100; } }
+
+/** Page size buttons: scales every rem-based size on the page, remembered on this device. */
+export function ZoomControl() {
+  const { t } = useI18n();
+  const [z, setZ] = useState(savedZoom);
+  const set = (n: number) => { setZ(n); applyZoom(n); try { localStorage.setItem('nq.zoom', String(n)); } catch { /* ignore */ } };
+  const i = ZOOMS.indexOf(z);
+  const cls = 'flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 text-base font-bold disabled:opacity-40 dark:border-slate-700';
+  return (
+    <span className="inline-flex items-center gap-1" role="group" aria-label={t('pageSize')}>
+      <button type="button" className={cls} disabled={i <= 0} onClick={() => set(ZOOMS[i - 1])} aria-label={t('smaller')}>−</button>
+      <span className="w-10 text-center text-xs text-slate-500" aria-live="polite">{z}%</span>
+      <button type="button" className={cls} disabled={i >= ZOOMS.length - 1} onClick={() => set(ZOOMS[i + 1])} aria-label={t('larger')}>+</button>
+    </span>
+  );
+}

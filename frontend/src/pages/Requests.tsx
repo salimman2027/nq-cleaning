@@ -2,18 +2,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { useI18n, type Key } from '../i18n';
-import { Button, ErrorBox, Skeleton } from '../ui';
+import { Button, ErrorBox, money, Skeleton } from '../ui';
 
-interface Req { Id: number; CustomerName: string; Phone: string; Address: string | null; PreferredDate: string; PreferredPeriod: string; Notes: string | null; Status: string; ServiceName: string }
+interface Req { Id: number; CustomerName: string; Phone: string; Address: string | null; PreferredDate: string; PreferredPeriod: string; Notes: string | null; Status: string; ServiceName: string; Total: number | null; PaymentMethod: string; PaymentStatus: string; Items: { Name: string; Qty: number; UnitPrice: number }[] }
 
 export default function Requests() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { can } = useAuth();
   const [rows, setRows] = useState<Req[] | null>(null);
   const [error, setError] = useState('');
   const load = useCallback(() => { api<{ items: Req[] }>('/requests').then((r) => setRows(r.items)).catch(() => setError('Error')); }, []);
   useEffect(load, [load]);
   const mark = async (id: number, status: string) => { try { await api(`/requests/${id}`, { method: 'PATCH', body: { status } }); load(); } catch { setError('Error'); } };
+  const pay = async (id: number, paymentStatus: string) => { try { await api(`/requests/${id}/payment`, { method: 'PATCH', body: { paymentStatus } }); load(); } catch { setError('Error'); } };
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">{t('requests')}</h1>
@@ -27,6 +28,9 @@ export default function Requests() {
                   <div className="text-sm text-slate-500"><a href={`tel:${r.Phone}`} dir="ltr" className="underline">{r.Phone}</a> · {String(r.PreferredDate).slice(0, 10)} · {t(`p_${r.PreferredPeriod}` as Key)}</div></div>
                 <span className="rounded-full bg-slate-200 px-3 py-1 text-xs dark:bg-slate-800">{t(`rs_${r.Status}` as Key)}</span>
               </div>
+              {r.Items.length > 0 && <ul className="mt-1 text-sm">{r.Items.map((i, k) => <li key={k}>{i.Name} × {i.Qty} — {money(i.UnitPrice * i.Qty, lang)}</li>)}</ul>}
+              {r.Total != null && <div className="mt-1 flex flex-wrap items-center gap-2 text-sm"><b>{t('total')}: {money(r.Total, lang)}</b><span className="text-slate-500">{t('cashLbl')} · {r.PaymentStatus === 'paid' ? t('paid') : t('unpaid')}</span>
+                {can('bookings.update') && r.PaymentStatus !== 'paid' && r.Status !== 'cancelled' && <Button variant="ghost" onClick={() => pay(r.Id, 'paid')}>{t('markPaid')}</Button>}</div>}
               {(r.Address || r.Notes) && <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{[r.Address, r.Notes].filter(Boolean).join(' — ')}</p>}
               {can('bookings.update') && r.Status !== 'cancelled' && r.Status !== 'confirmed' && (
                 <div className="mt-2 flex gap-2">

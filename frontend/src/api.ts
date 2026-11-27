@@ -45,19 +45,25 @@ function refresh(): Promise<boolean> {
   return refreshing;
 }
 
-export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown } = {}, retry = true): Promise<T> {
-  const t = read();
+const CKEY = 'nq.customer';
+export const customerToken = (): string | null => { try { return localStorage.getItem(CKEY); } catch { return null; } };
+export function saveCustomerToken(t: string | null): void { try { if (t) localStorage.setItem(CKEY, t); else localStorage.removeItem(CKEY); } catch { /* ignore */ } }
+
+export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown; customer?: boolean } = {}, retry = true): Promise<T> {
+  const ct = opts.customer ? customerToken() : null;
+  const t = opts.customer ? null : read();
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
       method: opts.method ?? 'GET',
-      headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: `Bearer ${t.accessToken}` } : {}) },
+      headers: { 'Content-Type': 'application/json', ...(ct ? { Authorization: `Bearer ${ct}` } : t ? { Authorization: `Bearer ${t.accessToken}` } : {}) },
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
     });
   } catch {
     throw new ApiError(0, 'NETWORK', 'Network error');
   }
   if (res.status === 401 && retry && t && (await refresh())) return api<T>(path, opts, false);
+  if (res.status === 401 && ct) window.dispatchEvent(new Event('nq:customer-logout'));
   if (res.status === 401 && t) window.dispatchEvent(new Event('nq:logout'));
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));

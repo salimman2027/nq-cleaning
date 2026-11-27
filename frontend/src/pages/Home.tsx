@@ -2,6 +2,8 @@ import { useEffect, useState, type PointerEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../auth';
+import { useShop } from '../shop';
+import { ZoomControl } from '../ui';
 import { useI18n } from '../i18n';
 import { SectorIcon } from '../sectorIcons';
 import { ErrorBox, Skeleton } from '../ui';
@@ -12,6 +14,7 @@ interface Co { CoverUrl?: string | null; ReviewedAt?: string | null; Slug: strin
 export function PublicShell({ children, flush = false }: { children: ReactNode; flush?: boolean }) {
   const { t, toggle } = useI18n();
   const { me } = useAuth();
+  const { count, customer } = useShop();
   const [logo, setLogo] = useState<string | null>(null);
   useEffect(() => { api<{ logoUrl: string | null }>('/market/brand').then((r) => setLogo(r.logoUrl)).catch(() => undefined); }, []);
   return (
@@ -25,6 +28,14 @@ export function PublicShell({ children, flush = false }: { children: ReactNode; 
           <nav className="flex items-center gap-2 text-sm">
             <Link to="/join" className="hidden rounded-lg px-3 py-2 text-white/85 hover:bg-white/10 sm:block">{t('joinAsCompany')}</Link>
             <Link to={me ? '/app' : '/login'} className="rounded-lg bg-white px-4 py-2 font-medium text-cyan-900 hover:bg-cyan-50">{me ? t('company') : t('companyLogin')}</Link>
+            <Link to="/cart" aria-label={t('cart')} className="relative rounded-lg px-2.5 py-2 text-white/90 hover:bg-white/10">
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 4h2l2.2 10.2a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L20 8H6.200" /><circle cx="9" cy="19" r="1.300" /><circle cx="17" cy="19" r="1.300" /></svg>
+              {count > 0 && <span className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-accent)] px-1 text-[10px] font-bold text-cyan-950">{count}</span>}
+            </Link>
+            <Link to="/account" aria-label={t('accountLbl')} className="rounded-lg px-2.5 py-2 text-white/90 hover:bg-white/10">
+              <svg viewBox="0 0 24 24" className={`h-5 w-5 ${customer ? 'text-[var(--color-accent)]' : ''}`} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><circle cx="12" cy="8" r="3.500" /><path d="M5 20c.8-3.600 3.700-5.500 7-5.500s6.200 1.900 7 5.500" /></svg>
+            </Link>
+            <span className="hidden sm:block"><ZoomControl /></span>
             <button onClick={toggle} className="rounded-lg px-3 py-2 text-white/85 hover:bg-white/10">{t('lang')}</button>
           </nav>
         </div>
