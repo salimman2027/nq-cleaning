@@ -117,7 +117,7 @@ companyRouter.put(
   }),
 );
 
-const uploadSchema = z.object({ fileName: z.string().min(1).max(200), dataBase64: z.string().min(20) });
+const uploadSchema = z.object({ fileName: z.string().min(1).max(200), dataBase64: z.string().min(4) });
 
 /** Upload (or replace) one official document. Values read from the file are returned as suggestions only. */
 companyRouter.put(
