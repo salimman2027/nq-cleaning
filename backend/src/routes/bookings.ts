@@ -79,7 +79,7 @@ bookingsRouter.get(
     const where = `b.CompanyId=@c AND b.IsDeleted=0 AND (@f IS NULL OR b.StartAt >= @f) AND (@t IS NULL OR b.StartAt < @t)
                    AND (@s IS NULL OR b.Status=@s) AND (@cu IS NULL OR b.CustomerId=@cu) AND (@b IS NULL OR b.BranchId=@b)`;
     const items = await query(
-      `SELECT b.Id, b.BookingNo, b.Status, b.StartAt, b.EndAt, b.Total, b.Paid, b.BranchId, c.Name AS CustomerName, c.Mobile AS CustomerMobile,
+      `SELECT b.Id, b.BookingNo, b.Status, b.StartAt, b.EndAt, b.Total, b.Paid, b.BranchId, b.SupervisorId, (SELECT FullName FROM Supervisors sv WHERE sv.Id=b.SupervisorId) AS SupervisorName, c.Name AS CustomerName, c.Mobile AS CustomerMobile,
               (SELECT COUNT(*) FROM BookingAssignments a WHERE a.BookingId=b.Id AND a.IsActive=1) AS TechnicianCount
          FROM Bookings b JOIN Customers c ON c.Id=b.CustomerId WHERE ${where}
         ORDER BY b.StartAt DESC, b.Id DESC OFFSET @off ROWS FETCH NEXT @ps ROWS ONLY`,
@@ -210,6 +210,32 @@ bookingsRouter.post(
   }),
 );
 
+async function setSupervisor(tx: sql.Transaction, companyId: number, bookingId: number, supervisorId: number | null) {
+  if (supervisorId !== null) {
+    const s = await query(`SELECT Id FROM Supervisors WHERE Id=@i AND CompanyId=@c AND IsDeleted=0`, { i: supervisorId, c: companyId }, tx);
+    if (!s[0]) throw new HttpError(400, 'VALIDATION_ERROR', 'Unknown supervisor');
+  }
+  await query(`UPDATE Bookings SET SupervisorId=@s WHERE Id=@b AND CompanyId=@c`, { s: supervisorId, b: bookingId, c: companyId }, tx);
+}
+
+/** Change the supervisor in charge of a booking at any time before it is closed or cancelled. */
+bookingsRouter.post(
+  '/:id/supervisor',
+  requirePerm('bookings.assign'),
+  h(async (req, res) => {
+    const id = parse(idParam, req.params.id);
+    const { supervisorId } = parse(z.object({ supervisorId: z.number().int().positive().nullable() }), req.body);
+    const u = req.user!;
+    await withTx(async (tx) => {
+      const bk = await lockBooking(tx, u, id);
+      if (bk.Status === 'closed' || bk.Status === 'cancelled') throw new HttpError(409, 'INVALID_STATE', `Cannot change the supervisor while booking is ${bk.Status}`);
+      await setSupervisor(tx, u.companyId, id, supervisorId);
+      await query(`INSERT INTO AuditLogs (CompanyId, UserId, Action, Entity, EntityId, Details) VALUES (@c,@u,'booking.supervisor','Booking',@e,@d)`, { c: u.companyId, u: u.id, e: String(id), d: supervisorId === null ? 'none' : String(supervisorId) }, tx);
+    });
+    res.json({ id, supervisorId });
+  }),
+);
+
 const ASSIGNABLE: BookingStatus[] = ['new', 'confirmed', 'awaiting_assignment', 'assigned', 'redo'];
 
 bookingsRouter.post(
@@ -217,13 +243,14 @@ bookingsRouter.post(
   requirePerm('bookings.assign'),
   h(async (req, res) => {
     const id = parse(idParam, req.params.id);
-    const { technicianIds } = parse(z.object({ technicianIds: z.array(z.number().int().positive()).min(1).max(30) }), req.body);
+    const { technicianIds, supervisorId } = parse(z.object({ technicianIds: z.array(z.number().int().positive()).min(1).max(30), supervisorId: z.number().int().positive().nullable().optional() }), req.body);
     const u = req.user!;
     const out = await withTx(async (tx) => {
       const bk = await lockBooking(tx, u, id);
       if (!ASSIGNABLE.includes(bk.Status)) throw new HttpError(409, 'INVALID_STATE', `Cannot assign technicians while booking is ${bk.Status}`);
       await query(`UPDATE BookingAssignments SET IsActive = 0 WHERE BookingId = @b AND IsActive = 1`, { b: id }, tx);
       await assertTechniciansFree(tx, u.companyId, technicianIds, bk.StartAt, bk.EndAt, id);
+      if (supervisorId !== undefined) await setSupervisor(tx, u.companyId, id, supervisorId);
       for (const t of [...new Set(technicianIds)]) {
         await query(`INSERT INTO BookingAssignments (BookingId, TechnicianId, StartAt, EndAt) VALUES (@b,@t,@s,@e)`, { b: id, t, s: dt(bk.StartAt), e: dt(bk.EndAt) }, tx);
       }

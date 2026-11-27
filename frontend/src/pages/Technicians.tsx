@@ -4,7 +4,7 @@ import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 import { Button, ErrorBox, Field, Input, Modal, Select, Skeleton } from '../ui';
 
-interface Tech { Id: number; Code: string; FullName: string; Mobile: string | null; BranchId: number; Status: string }
+interface Tech { SupervisorId: number | null; Id: number; Code: string; FullName: string; Mobile: string | null; BranchId: number; Status: string }
 const STATUS = ['available', 'booked', 'on_the_way', 'working', 'break', 'absent', 'leave', 'off_duty'];
 
 export default function Technicians() {
@@ -13,6 +13,9 @@ export default function Technicians() {
   const [rows, setRows] = useState<Tech[] | null>(null);
   const [err, setErr] = useState('');
   const [adding, setAdding] = useState(false);
+  const [sups, setSups] = useState<{ Id: number; FullName: string }[]>([]);
+  useEffect(() => { api<{ items: { Id: number; FullName: string }[] }>('/supervisors').then((r) => setSups(r.items)).catch(() => undefined); }, []);
+  const setSup = async (id: number, v: string) => { try { await api(`/supervisors/technician/${id}`, { method: 'PUT', body: { supervisorId: v ? Number(v) : null } }); load(); } catch (e) { setErr((e as Error).message); } };
   const load = useCallback(() => { api<{ items: Tech[] }>('/technicians').then((r) => setRows(r.items)).catch((e: Error) => setErr(e.message)); }, []);
   useEffect(load, [load]);
 
@@ -27,10 +30,11 @@ export default function Technicians() {
       {!rows ? <Skeleton /> : rows.length === 0 ? <p className="text-slate-500">{t('noData')}</p> : (
         <div className="overflow-x-auto rounded-xl bg-white dark:bg-slate-900">
           <table className="w-full text-sm">
-            <thead className="text-slate-500"><tr>{[t('code'), t('name'), t('mobile'), t('status')].map((h) => <th key={h} className="p-3 text-start">{h}</th>)}</tr></thead>
+            <thead className="text-slate-500"><tr>{[t('code'), t('name'), t('mobile'), t('supervisor'), t('status')].map((h) => <th key={h} className="p-3 text-start">{h}</th>)}</tr></thead>
             <tbody>{rows.map((r) => (
               <tr key={r.Id} className="border-t border-slate-100 dark:border-slate-800">
                 <td className="p-3">{r.Code}</td><td className="p-3">{r.FullName}</td><td className="p-3" dir="ltr">{r.Mobile ?? '—'}</td>
+                <td className="p-3">{can('technicians.manage') ? <Select value={r.SupervisorId ?? ''} onChange={(e) => setSup(r.Id, e.target.value)}><option value="">—</option>{sups.map((x) => <option key={x.Id} value={x.Id}>{x.FullName}</option>)}</Select> : (sups.find((x) => x.Id === r.SupervisorId)?.FullName ?? '—')}</td>
                 <td className="p-3">{can('technicians.manage') ? <Select value={r.Status} onChange={(e) => setStatus(r.Id, e.target.value)}>{STATUS.map((s) => <option key={s}>{s}</option>)}</Select> : r.Status}</td>
               </tr>))}
             </tbody>

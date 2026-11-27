@@ -198,6 +198,37 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal(after.body.items.length, 2, 'the request sent while signed in appears in my orders; the visitor one does not');
   });
 
+  test('supervisors, technicians, booking supervisor, expenses, profit and staff reports', async () => {
+    const br = (await request(app).get('/api/branches').set(auth(ownerToken))).body.items[0];
+    const sup = await request(app).post('/api/supervisors').set(auth(ownerToken)).send({ fullName: 'Khaled Supervisor', mobile: '0551230000', branchId: br.Id });
+    assert.equal(sup.status, 201);
+    const sup2 = await request(app).post('/api/supervisors').set(auth(ownerToken)).send({ fullName: 'Omar Supervisor', branchId: br.Id });
+    const tech = await request(app).post('/api/technicians').set(auth(ownerToken)).send({ fullName: 'Tech One', branchId: br.Id, hourlyCost: 20 });
+    assert.equal(tech.status, 201);
+    assert.equal((await request(app).put(`/api/supervisors/technician/${tech.body.id}`).set(auth(ownerToken)).send({ supervisorId: sup.body.id })).status, 200);
+    assert.equal((await request(app).put(`/api/supervisors/technician/${tech.body.id}`).set(auth(ownerToken)).send({ supervisorId: 999999 })).status, 400);
+    let list = await request(app).get('/api/supervisors').set(auth(ownerToken));
+    assert.equal(list.body.items.find((x: { Id: number }) => x.Id === sup.body.id).technicians.length, 1);
+    const bk = (await request(app).get('/api/bookings').set(auth(ownerToken))).body.items[0];
+    assert.equal((await request(app).post(`/api/bookings/${bk.Id}/supervisor`).set(auth(ownerToken)).send({ supervisorId: sup.body.id })).status, 200);
+    assert.equal((await request(app).post(`/api/bookings/${bk.Id}/supervisor`).set(auth(ownerToken)).send({ supervisorId: sup2.body.id })).status, 200, 'supervisor can be changed freely');
+    assert.equal((await request(app).post(`/api/bookings/${bk.Id}/assign`).set(auth(ownerToken)).send({ technicianIds: [tech.body.id], supervisorId: sup.body.id })).status, 200);
+    assert.equal((await request(app).get(`/api/bookings/${bk.Id}`).set(auth(ownerToken))).body.SupervisorId, sup.body.id);
+    const month = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 7);
+    const today = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
+    assert.equal((await request(app).post('/api/finance/expenses').set(auth(ownerToken)).send({ date: today, category: 'Fuel', amount: 150.5 })).status, 201);
+    assert.equal((await request(app).post('/api/finance/expenses').set(auth(ownerToken)).send({ date: today, category: 'Fuel', amount: -5 })).status, 400);
+    const profit = await request(app).get(`/api/finance/reports/profit?month=${month}`).set(auth(ownerToken));
+    assert.equal(profit.status, 200);
+    assert.equal(profit.body.expenses.total, 150.5);
+    assert.equal(profit.body.isLoss, profit.body.profit < 0);
+    const staff = await request(app).get('/api/finance/reports/staff').set(auth(ownerToken));
+    assert.equal(staff.status, 200);
+    assert.ok(staff.body.supervisors.length >= 2 && staff.body.technicians.length >= 1);
+    assert.equal((await request(app).get('/api/finance/reports/profit').set(auth(platToken))).status, 403);
+    assert.equal((await request(app).delete(`/api/supervisors/${sup2.body.id}`).set(auth(ownerToken))).status, 204);
+  });
+
   test('platform monitor counts activity per period; complaints reach the platform only', async () => {
     for (const period of ['day', 'week', 'month']) {
       const m = await request(app).get(`/api/platform/monitor?period=${period}`).set(auth(platToken));

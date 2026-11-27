@@ -20,6 +20,9 @@ import Requests from './pages/Requests';
 import Company from './pages/Company';
 import Monitor from './pages/Monitor';
 import Complaints from './pages/Complaints';
+import Supervisors from './pages/Supervisors';
+import Finance from './pages/Finance';
+import StaffReport from './pages/StaffReport';
 import Review from './pages/Review';
 import Settings from './pages/Settings';
 
@@ -34,6 +37,9 @@ const NAV: { to: string; key: Key; perm: string; icon: string }[] = [
   { to: '/app/bookings', key: 'bookings', perm: 'bookings.view', icon: '📅' },
   { to: '/app/customers', key: 'customers', perm: 'customers.view', icon: '👥' },
   { to: '/app/technicians', key: 'technicians', perm: 'technicians.view', icon: '🧹' },
+  { to: '/app/supervisors', key: 'supervisors', perm: 'technicians.view', icon: '🧑‍💼' },
+  { to: '/app/staff-report', key: 'staffReport', perm: 'finance.view_cost', icon: '📈' },
+  { to: '/app/finance', key: 'finance', perm: 'finance.view_cost', icon: '💰' },
   { to: '/app/categories', key: 'categories', perm: 'services.view', icon: '🗂' },
   { to: '/app/services', key: 'services', perm: 'services.view', icon: '🛠' },
 ];
@@ -117,6 +123,9 @@ export default function App() {
         <Route path="requests" element={<Requests />} />
         <Route path="bookings" element={<Bookings />} />
         <Route path="customers" element={<Customers />} />
+        <Route path="supervisors" element={<Supervisors />} />
+        <Route path="finance" element={<Finance />} />
+        <Route path="staff-report" element={<StaffReport />} />
         <Route path="technicians" element={<Technicians />} />
         <Route path="categories" element={<Categories />} />
         <Route path="services" element={<Services />} />

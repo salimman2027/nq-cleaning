@@ -7,6 +7,7 @@ import { Button, dateTime, ErrorBox, Field, Input, Modal, money, Select, Skeleto
 
 interface Row { Id: number; BookingNo: string; Status: string; StartAt: string; EndAt: string; Total: number; Paid: number; CustomerName: string; CustomerMobile: string; TechnicianCount: number }
 interface Detail extends Row {
+  SupervisorId: number | null;
   Notes: string | null; City: string | null; District: string | null; Street: string | null; MapUrl: string | null;
   lines: { Id: number; ServiceName: string; Quantity: number; UnitPrice: number; LineTotal: number }[];
   assignments: { Id: number; TechnicianId: number; FullName: string; IsActive: boolean }[];
@@ -112,6 +113,7 @@ function BookingDetail({ id, onClose, onChanged }: { id: number; onClose: () => 
             {d.assignments.filter((a) => a.IsActive).map((a) => <div key={a.Id}>{a.FullName}</div>)}
             {d.assignments.every((a) => !a.IsActive) && <span className="text-slate-500">—</span>}
           </div>
+          {can('bookings.assign') && !['closed', 'cancelled'].includes(d.Status) && <SupervisorPicker booking={d} onDone={() => { load(); onChanged(); }} onError={setErr} />}
           {can('bookings.assign') && ['new', 'confirmed', 'awaiting_assignment', 'assigned', 'redo'].includes(d.Status) && <AssignPanel booking={d} onDone={() => { load(); onChanged(); }} onError={setErr} />}
           {can('bookings.status') && NEXT[d.Status]?.length > 0 && (
             <div className="flex flex-wrap gap-2">{NEXT[d.Status].map((s) => <Button key={s} variant={s === 'cancelled' ? 'danger' : 'ghost'} onClick={() => change(s)}>{label(s)}</Button>)}</div>
@@ -128,24 +130,53 @@ function BookingDetail({ id, onClose, onChanged }: { id: number; onClose: () => 
 
 function AssignPanel({ booking, onDone, onError }: { booking: Detail; onDone: () => void; onError: (m: string) => void }) {
   const { t } = useI18n();
-  const [techs, setTechs] = useState<{ Id: number; FullName: string }[]>([]);
+  const [techs, setTechs] = useState<{ Id: number; FullName: string; SupervisorId?: number | null }[]>([]);
+  const [sups, setSups] = useState<{ Id: number; FullName: string }[]>([]);
+  const [supId, setSupId] = useState<string>(booking.SupervisorId ? String(booking.SupervisorId) : '');
   const [sel, setSel] = useState<number[]>([]);
+  useEffect(() => { api<{ items: { Id: number; FullName: string }[] }>('/supervisors').then((r) => setSups(r.items)).catch(() => undefined); }, []);
   useEffect(() => {
     // Technicians already on this booking are not "available" for their own slot, so list them too.
-    api<{ items: { Id: number; FullName: string }[] }>(`/technicians/available?start=${encodeURIComponent(booking.StartAt)}&end=${encodeURIComponent(booking.EndAt)}`)
-      .then((r) => setTechs([...booking.assignments.filter((a) => a.IsActive).map((a) => ({ Id: a.TechnicianId, FullName: a.FullName })), ...r.items]))
+    api<{ items: { Id: number; FullName: string; SupervisorId?: number | null }[] }>(`/technicians/available?start=${encodeURIComponent(booking.StartAt)}&end=${encodeURIComponent(booking.EndAt)}`)
+      .then((r) => setTechs([...booking.assignments.filter((a) => a.IsActive).map((a) => ({ Id: a.TechnicianId, FullName: a.FullName, SupervisorId: undefined as number | null | undefined })), ...r.items]))
       .catch((e: Error) => onError(e.message));
   }, [booking, onError]);
   const save = async () => {
-    try { await api(`/bookings/${booking.Id}/assign`, { method: 'POST', body: { technicianIds: sel } }); onDone(); } catch (e) { onError(e instanceof ApiError ? e.message : 'Error'); }
+    try { await api(`/bookings/${booking.Id}/assign`, { method: 'POST', body: { technicianIds: sel, supervisorId: supId ? Number(supId) : null } }); onDone(); } catch (e) { onError(e instanceof ApiError ? e.message : 'Error'); }
   };
   return (
     <div>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="font-semibold">{t('supervisor')}</span>
+        <select className="rounded-lg border border-slate-300 bg-white px-2 py-1 dark:border-slate-600 dark:bg-slate-800" value={supId} onChange={(e) => setSupId(e.target.value)}>
+          <option value="">—</option>{sups.map((x) => <option key={x.Id} value={x.Id}>{x.FullName}</option>)}
+        </select>
+        {supId && <Button variant="ghost" onClick={() => setSel(techs.filter((x) => String(x.SupervisorId) === supId).map((x) => x.Id))}>{t('pickSupTeam')}</Button>}
+      </div>
       <div className="mb-1 font-semibold">{t('pickTechs')}</div>
       <div className="flex flex-wrap gap-3">
         {techs.map((x) => <label key={x.Id} className="flex items-center gap-1"><input type="checkbox" checked={sel.includes(x.Id)} onChange={(e) => setSel(e.target.checked ? [...sel, x.Id] : sel.filter((i) => i !== x.Id))} />{x.FullName}</label>)}
       </div>
       <Button className="mt-2" disabled={sel.length === 0} onClick={save}>{t('apply')}</Button>
+    </div>
+  );
+}
+
+function SupervisorPicker({ booking, onDone, onError }: { booking: Detail; onDone: () => void; onError: (m: string) => void }) {
+  const { t } = useI18n();
+  const [sups, setSups] = useState<{ Id: number; FullName: string }[]>([]);
+  const [v, setV] = useState(booking.SupervisorId ? String(booking.SupervisorId) : '');
+  useEffect(() => { api<{ items: { Id: number; FullName: string }[] }>('/supervisors').then((r) => setSups(r.items)).catch(() => undefined); }, []);
+  const save = async () => {
+    try { await api(`/bookings/${booking.Id}/supervisor`, { method: 'POST', body: { supervisorId: v ? Number(v) : null } }); onDone(); } catch (e) { onError(e instanceof ApiError ? e.message : 'Error'); }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="font-semibold">{t('supervisor')}</span>
+      <select className="rounded-lg border border-slate-300 bg-white px-2 py-1 dark:border-slate-600 dark:bg-slate-800" value={v} onChange={(e) => setV(e.target.value)}>
+        <option value="">—</option>{sups.map((x) => <option key={x.Id} value={x.Id}>{x.FullName}</option>)}
+      </select>
+      <Button variant="ghost" disabled={v === (booking.SupervisorId ? String(booking.SupervisorId) : '')} onClick={save}>{t('changeSupervisor')}</Button>
     </div>
   );
 }

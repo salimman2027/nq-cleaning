@@ -16,7 +16,7 @@ techniciansRouter.get(
   h(async (req, res) => {
     const scope = branchScope(req.user!);
     const rows = await query(
-      `SELECT Id, Code, FullName, Mobile, BranchId, HourlyCost, Status FROM Technicians
+      `SELECT Id, Code, FullName, Mobile, BranchId, HourlyCost, Status, SupervisorId, (SELECT FullName FROM Supervisors sv WHERE sv.Id=Technicians.SupervisorId) AS SupervisorName FROM Technicians
         WHERE CompanyId=@c AND IsDeleted=0 AND (@b IS NULL OR BranchId=@b) ORDER BY FullName`,
       { c: req.user!.companyId, b: scope },
     );
@@ -36,7 +36,7 @@ techniciansRouter.get(
     const buffer = config.travelBufferMinutes * 60 * 1000;
     const scope = branchScope(req.user!);
     const rows = await query(
-      `SELECT t.Id, t.Code, t.FullName, t.BranchId FROM Technicians t
+      `SELECT t.Id, t.Code, t.FullName, t.BranchId, t.SupervisorId FROM Technicians t
         WHERE t.CompanyId=@c AND t.IsDeleted=0 AND t.Status NOT IN ('absent','leave','off_duty') AND (@b IS NULL OR t.BranchId=@b)
           AND NOT EXISTS (SELECT 1 FROM BookingAssignments a JOIN Bookings bk ON bk.Id=a.BookingId
                            WHERE a.TechnicianId=t.Id AND a.IsActive=1 AND bk.IsDeleted=0 AND bk.Status NOT IN ('cancelled','postponed')
