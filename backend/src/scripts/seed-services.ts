@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { closePool, money, query, withTx } from '../db';
 
 /** Starter cleaning catalogue. Prices are ESTIMATES in SAR to be edited by the company; they are not market data. */
@@ -16,6 +18,18 @@ export const CLEANING_STARTER: { name: string; method: string; price: number; un
   { name: 'تنظيف واجهات زجاجية', method: 'per_sqm', price: 6, unit: 'sqm', minutes: 240, techs: 2, category: 'المكاتب والمحلات' },
 ];
 
+const CATEGORY_IMAGES: Record<string, string> = {
+  'التنظيف العميق للمنازل': 'cat-01', 'المجالس والمفروشات': 'cat-02', 'غسيل وتنظيف المكيفات': 'cat-03', 'المطابخ وخزانات المياه': 'cat-04', 'المكاتب والمحلات': 'cat-05',
+};
+const SEED_DIR = path.resolve(__dirname, '..', '..', 'assets', 'seed');
+
+/** Stores one bundled illustration and returns its public URL. Illustrations are original artwork made for this platform. */
+async function storeImage(companyId: number, file: string, tx: import('mssql').Transaction): Promise<string> {
+  const data = readFileSync(path.join(SEED_DIR, `${file}.webp`));
+  const r = (await query<{ Id: number }>(`INSERT INTO MediaFiles (CompanyId, MimeType, SizeBytes, Data) OUTPUT inserted.Id VALUES (@c,'image/webp',@s,@d)`, { c: companyId, s: data.length, d: data }, tx))[0];
+  return `/api/media/${r.Id}`;
+}
+
 export async function seedServices(companyNameLike: string): Promise<{ company: string; added: number; skipped: number }> {
   const cos = await query<{ Id: number; Name: string }>(
     `SELECT Id, Name FROM Companies WHERE IsDeleted=0 AND IsPlatform=0 AND Name LIKE '%' + @n + '%'`,
@@ -27,15 +41,26 @@ export async function seedServices(companyNameLike: string): Promise<{ company: 
   let added = 0;
   let skipped = 0;
   await withTx(async (tx) => {
-    for (const s of CLEANING_STARTER) {
-      const ex = await query(`SELECT 1 AS x FROM Services WHERE CompanyId=@c AND Name=@n AND IsDeleted=0`, { c: co.Id, n: s.name }, tx);
-      if (ex.length) { skipped++; continue; }
+    for (const [i, s] of CLEANING_STARTER.entries()) {
+      const ex = await query<{ Id: number; ImageUrl: string | null }>(`SELECT Id, ImageUrl FROM Services WHERE CompanyId=@c AND Name=@n AND IsDeleted=0`, { c: co.Id, n: s.name }, tx);
+      if (ex.length) {
+        skipped++;
+        if (!ex[0].ImageUrl) await query(`UPDATE Services SET ImageUrl=@u WHERE Id=@i`, { u: await storeImage(co.Id, `svc-${String(i + 1).padStart(2, '0')}`, tx), i: ex[0].Id }, tx);
+        continue;
+      }
       const r = (await query<{ Id: number }>(
-        `INSERT INTO Services (CompanyId, Name, PricingMethod, DefaultMinutes, DefaultTechnicians, Category) OUTPUT INSERTED.Id VALUES (@c,@n,@m,@d,@t,@cat)`,
-        { c: co.Id, n: s.name, m: s.method, d: s.minutes, t: s.techs, cat: s.category }, tx,
+        `INSERT INTO Services (CompanyId, Name, PricingMethod, DefaultMinutes, DefaultTechnicians, Category, ImageUrl) OUTPUT INSERTED.Id VALUES (@c,@n,@m,@d,@t,@cat,@im)`,
+        { c: co.Id, n: s.name, m: s.method, d: s.minutes, t: s.techs, cat: s.category, im: await storeImage(co.Id, `svc-${String(i + 1).padStart(2, '0')}`, tx) }, tx,
       ))[0];
       await query(`INSERT INTO ServicePrices (ServiceId, Price, Unit, ValidFrom) VALUES (@s,@p,@u,CAST(SYSUTCDATETIME() AS DATE))`, { s: r.Id, p: money(s.price), u: s.unit }, tx);
       added++;
+    }
+    for (const [name, file] of Object.entries(CATEGORY_IMAGES)) {
+      const c = await query<{ ImageUrl: string | null }>(`SELECT ImageUrl FROM ServiceCategories WHERE CompanyId=@c AND Name=@n`, { c: co.Id, n: name }, tx);
+      if (c.length && c[0].ImageUrl) continue;
+      const url = await storeImage(co.Id, file, tx);
+      if (c.length) await query(`UPDATE ServiceCategories SET ImageUrl=@u WHERE CompanyId=@c AND Name=@n`, { u: url, c: co.Id, n: name }, tx);
+      else await query(`INSERT INTO ServiceCategories (CompanyId, Name, ImageUrl) VALUES (@c,@n,@u)`, { c: co.Id, n: name, u: url }, tx);
     }
   });
   return { company: co.Name, added, skipped };

@@ -52,6 +52,8 @@ function ServiceForm({ svc, onClose, onSaved }: { svc: Svc | null; onClose: () =
   });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [cats, setCats] = useState<string[]>([]);
+  useEffect(() => { api<{ items: { Name: string }[] }>('/services/categories').then((r) => setCats(r.items.map((x) => x.Name))).catch(() => undefined); }, []);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setErr('');
@@ -74,7 +76,7 @@ function ServiceForm({ svc, onClose, onSaved }: { svc: Svc | null; onClose: () =
       <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2"><ImageUpload value={f.imageUrl} onChange={(u) => setF({ ...f, imageUrl: u })} /></div>
         <Field label={t('name')}><Input required value={f.name} onChange={set('name')} /></Field>
-        <Field label={t('categoryLbl')}><Input value={f.category} onChange={set('category')} /></Field>
+        <Field label={t('categoryLbl')}><Input list="cats" value={f.category} onChange={set('category')} /><datalist id="cats">{cats.map((c) => <option key={c} value={c} />)}</datalist></Field>
         <Field label={t('pricingMethod')}><Select value={f.pricingMethod} onChange={set('pricingMethod')}>{METHODS.map((m) => <option key={m}>{m}</option>)}</Select></Field>
         <Field label={t('price')}><Input type="number" min={0} step="0.01" required value={f.price} onChange={set('price')} /></Field>
         <Field label={t('defaultMinutes')}><Input type="number" min={15} required value={f.defaultMinutes} onChange={set('defaultMinutes')} /></Field>

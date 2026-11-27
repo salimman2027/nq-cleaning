@@ -7,7 +7,7 @@ import { ErrorBox, Modal, money, Skeleton } from '../ui';
 import { PublicShell } from './Home';
 
 interface Store {
-  slug: string; name: string; description: string | null; logoUrl: string | null; coverUrl?: string | null; whatsapp?: string | null; primaryColor: string | null;
+  slug: string; name: string; description: string | null; logoUrl: string | null; coverUrl?: string | null; whatsapp?: string | null; categories?: { Name: string; ImageUrl: string }[]; primaryColor: string | null;
   sectors: { Code: string; NameAr: string; NameEn: string }[];
   services: { Id: number; Name: string; DefaultMinutes: number; FromPrice: number | null; ImageUrl: string | null; Category: string | null; Description: string | null; Includes: string | null; Notes: string | null }[];
 }
@@ -127,7 +127,7 @@ export default function Storefront() {
                 <p className="mb-4 text-sm text-slate-500">{t('oneBrandSub')}</p>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                   {groups.map(([cat, list], i) => {
-                    const img = list.find((x) => x.ImageUrl)?.ImageUrl;
+                    const img = s.categories?.find((c) => c.Name === cat)?.ImageUrl ?? list.find((x) => x.ImageUrl)?.ImageUrl;
                     const from = Math.min(...list.map((x) => x.FromPrice ?? Infinity));
                     return (
                       <button key={cat} onClick={() => document.getElementById(`cat-${i}`)?.scrollIntoView({ behavior: 'smooth' })} onPointerMove={glowMove}

@@ -12,6 +12,7 @@ import Services from './pages/Services';
 import Home from './pages/Home';
 import Storefront from './pages/Storefront';
 import Register from './pages/Register';
+import Categories from './pages/Categories';
 import Requests from './pages/Requests';
 import Company from './pages/Company';
 import Review from './pages/Review';
@@ -26,6 +27,7 @@ const NAV: { to: string; key: Key; perm: string; icon: string }[] = [
   { to: '/app/bookings', key: 'bookings', perm: 'bookings.view', icon: '📅' },
   { to: '/app/customers', key: 'customers', perm: 'customers.view', icon: '👥' },
   { to: '/app/technicians', key: 'technicians', perm: 'technicians.view', icon: '🧹' },
+  { to: '/app/categories', key: 'categories', perm: 'services.view', icon: '🗂' },
   { to: '/app/services', key: 'services', perm: 'services.view', icon: '🛠' },
 ];
 
@@ -104,6 +106,7 @@ export default function App() {
         <Route path="bookings" element={<Bookings />} />
         <Route path="customers" element={<Customers />} />
         <Route path="technicians" element={<Technicians />} />
+        <Route path="categories" element={<Categories />} />
         <Route path="services" element={<Services />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

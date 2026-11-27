@@ -23,6 +23,37 @@ const serviceSchema = z.object({
   category: z.string().trim().max(80).nullable().optional(),
 });
 
+/** Categories = distinct Services.Category text plus any category that only has a picture so far. */
+servicesRouter.get(
+  '/categories',
+  requirePerm('services.view'),
+  h(async (req, res) => {
+    const items = await query(
+      `SELECT n.Name, c.ImageUrl, (SELECT COUNT(*) FROM Services s WHERE s.CompanyId=@c AND s.IsDeleted=0 AND s.Category=n.Name) AS Services
+         FROM (SELECT Category AS Name FROM Services WHERE CompanyId=@c AND IsDeleted=0 AND Category IS NOT NULL
+               UNION SELECT Name FROM ServiceCategories WHERE CompanyId=@c) n
+         LEFT JOIN ServiceCategories c ON c.CompanyId=@c AND c.Name=n.Name
+        ORDER BY n.Name`,
+      { c: req.user!.companyId },
+    );
+    res.json({ items });
+  }),
+);
+
+servicesRouter.put(
+  '/categories',
+  requirePerm('services.manage'),
+  h(async (req, res) => {
+    const b = parse(z.object({ name: z.string().trim().min(2).max(80), imageUrl: imageRef }), req.body);
+    await query(
+      `MERGE ServiceCategories AS t USING (SELECT @c AS CompanyId, @n AS Name) AS s ON t.CompanyId=s.CompanyId AND t.Name=s.Name
+       WHEN MATCHED THEN UPDATE SET ImageUrl=@im WHEN NOT MATCHED THEN INSERT (CompanyId, Name, ImageUrl) VALUES (@c,@n,@im);`,
+      { c: req.user!.companyId, n: b.name, im: b.imageUrl ?? null },
+    );
+    res.json({ name: b.name, imageUrl: b.imageUrl ?? null });
+  }),
+);
+
 servicesRouter.get(
   '/',
   requirePerm('services.view'),
