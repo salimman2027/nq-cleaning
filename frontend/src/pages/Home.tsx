@@ -36,6 +36,9 @@ export function PublicShell({ children, flush = false }: { children: ReactNode; 
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 4h2l2.2 10.2a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L20 8H6.200" /><circle cx="9" cy="19" r="1.300" /><circle cx="17" cy="19" r="1.300" /></svg>
               {count > 0 && <span className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-accent)] px-1 text-[10px] font-bold text-cyan-950">{count}</span>}
             </Link>
+            <Link to="/account" className={`hidden max-w-[11rem] truncate rounded-full px-3 py-1.5 text-xs sm:block ${customer || me ? 'bg-white/15 text-white' : 'bg-white/10 text-white/70'}`}>
+              {customer ? `${t('welcomeUser')} ${customer.name.split(' ')[0]}` : me ? `${t('welcomeUser')} ${me.FullName.split(' ')[0]}` : t('notSignedIn')}
+            </Link>
             <Link to="/account" aria-label={t('accountLbl')} className="rounded-lg px-2.5 py-2 text-white/90 hover:bg-white/10">
               <svg viewBox="0 0 24 24" className={`h-5 w-5 ${customer ? 'text-[var(--color-accent)]' : ''}`} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><circle cx="12" cy="8" r="3.500" /><path d="M5 20c.8-3.600 3.700-5.500 7-5.500s6.200 1.900 7 5.500" /></svg>
             </Link>
