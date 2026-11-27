@@ -87,6 +87,21 @@ marketRouter.post('/companies/:slug/requests', requestLimiter, h(async (req, res
   res.status(201).json({ id: r[0].Id, status: 'new' });
 }));
 
+const complaintLimiter = rateLimit({ windowMs: 60 * 60_000, limit: 5, standardHeaders: true, legacyHeaders: false, skip: () => config.env === 'test' });
+/** A visitor reports a problem with a company; the platform team reviews it. */
+marketRouter.post('/companies/:slug/complaints', complaintLimiter, h(async (req, res) => {
+  const slug = parse(z.string().regex(/^[a-z0-9-]{3,60}$/), req.params.slug);
+  const b = parse(z.object({
+    customerName: z.string().trim().min(2).max(120),
+    phone: z.string().trim().refine(isSaudiMobile, 'Saudi mobile (05XXXXXXXX)'),
+    message: z.string().trim().min(10).max(1000),
+  }), req.body);
+  const c = (await query<{ Id: number }>(`SELECT Id FROM Companies WHERE Slug=@s AND Status IN ('approved','suspended') AND IsDeleted=0 AND IsPlatform=0`, { s: slug }))[0];
+  if (!c) throw new HttpError(404, 'NOT_FOUND', 'Company not found');
+  const r = await query<{ Id: number }>(`INSERT INTO Complaints (CompanyId, CustomerName, Phone, Message) OUTPUT inserted.Id VALUES (@c,@n,@p,@m)`, { c: c.Id, n: b.customerName, p: b.phone, m: b.message });
+  res.status(201).json({ id: r[0].Id });
+}));
+
 marketRouter.get('/brand', h(async (_req, res) => {
   const r = await query<{ Value: string }>(`SELECT s.Value FROM SystemSettings s JOIN Companies c ON c.Id=s.CompanyId WHERE c.IsPlatform=1 AND s.[Key]='brand.logoUrl'`);
   res.json({ logoUrl: r[0]?.Value ?? null });

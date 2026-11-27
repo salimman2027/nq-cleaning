@@ -17,11 +17,15 @@ import Cart from './pages/Cart';
 import Categories from './pages/Categories';
 import Requests from './pages/Requests';
 import Company from './pages/Company';
+import Monitor from './pages/Monitor';
+import Complaints from './pages/Complaints';
 import Review from './pages/Review';
 import Settings from './pages/Settings';
 
 const NAV: { to: string; key: Key; perm: string; icon: string }[] = [
   { to: '/app/review', key: 'review', perm: 'platform.companies.view', icon: '✅' },
+  { to: '/app/monitor', key: 'monitor', perm: 'platform.companies.view', icon: '📊' },
+  { to: '/app/complaints', key: 'complaints', perm: 'platform.companies.view', icon: '🚩' },
   { to: '/app/settings', key: 'settings', perm: 'platform.brand.manage', icon: '⚙' },
   { to: '/app/company', key: 'company', perm: 'company.profile.manage', icon: '🏢' },
   { to: '/app', key: 'dashboard', perm: 'dashboard.view', icon: '▦' },
@@ -106,6 +110,8 @@ export default function App() {
         <Route index element={<AppHome />} />
         <Route path="company" element={<Company />} />
         <Route path="review" element={<Review />} />
+        <Route path="monitor" element={<Monitor />} />
+        <Route path="complaints" element={<Complaints />} />
         <Route path="settings" element={<Settings />} />
         <Route path="requests" element={<Requests />} />
         <Route path="bookings" element={<Bookings />} />

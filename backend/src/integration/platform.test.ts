@@ -151,8 +151,33 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).put('/api/company').set(auth(ownerToken)).send({ coverUrl: 'http://example.test/c.jpg' })).status, 400);
   });
 
+  test('platform monitor counts activity per period; complaints reach the platform only', async () => {
+    for (const period of ['day', 'week', 'month']) {
+      const m = await request(app).get(`/api/platform/monitor?period=${period}`).set(auth(platToken));
+      assert.equal(m.status, 200);
+      const row = m.body.companies.find((c: { Id: number }) => c.Id === companyId);
+      assert.ok(row, 'company listed');
+      assert.equal(Number(row.Requests), 1);
+      assert.equal(m.body.totals.requests >= 1, true);
+    }
+    assert.equal((await request(app).get('/api/platform/monitor?period=year').set(auth(platToken))).status, 400);
+    assert.equal((await request(app).get('/api/platform/monitor').set(auth(ownerToken))).status, 403);
+    const bad = await request(app).post('/api/market/companies/clean-co/complaints').send({ customerName: 'Sara', phone: '0501234567', message: 'short' });
+    assert.equal(bad.status, 400);
+    const c = await request(app).post('/api/market/companies/clean-co/complaints').send({ customerName: 'Sara', phone: '0501234567', message: 'The team arrived two hours late.' });
+    assert.equal(c.status, 201);
+    assert.equal((await request(app).post('/api/market/companies/nope-co/complaints').send({ customerName: 'Sara', phone: '0501234567', message: 'The team arrived two hours late.' })).status, 404);
+    const list = await request(app).get('/api/platform/complaints?status=open').set(auth(platToken));
+    assert.equal(list.body.items.length >= 1, true);
+    assert.equal((await request(app).get('/api/platform/complaints').set(auth(ownerToken))).status, 403);
+    assert.equal((await request(app).patch(`/api/platform/complaints/${c.body.id}`).set(auth(platToken)).send({ status: 'resolved', note: 'Called the company' })).status, 200);
+    const done = await request(app).get('/api/platform/complaints?status=resolved').set(auth(platToken));
+    assert.equal(done.body.items.some((x: { Id: number }) => x.Id === c.body.id), true);
+  });
+
   test('suspension blocks tenant APIs immediately and hides the storefront', async () => {
     assert.equal((await request(app).post(`/api/platform/companies/${companyId}/suspend`).set(auth(platToken)).send({ reason: 'Policy violation' })).status, 200);
+    assert.equal((await request(app).get('/api/company').set(auth(ownerToken))).body.reviewNote, 'Policy violation');
     assert.equal((await request(app).get('/api/customers').set(auth(ownerToken))).status, 403);
     assert.equal((await request(app).get('/api/market/companies/clean-co')).status, 404);
     assert.equal((await request(app).post(`/api/platform/companies/${companyId}/reactivate`).set(auth(platToken))).status, 200);

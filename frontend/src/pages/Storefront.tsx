@@ -5,6 +5,7 @@ import { useI18n, type Key } from '../i18n';
 import { SectorIcon } from '../sectorIcons';
 import { ErrorBox, Modal, money, Skeleton } from '../ui';
 import { useShop } from '../shop';
+import ComplaintForm from './ComplaintForm';
 import { PublicShell } from './Home';
 
 interface Store {
@@ -66,6 +67,7 @@ export default function Storefront() {
   const color = s?.primaryColor ?? '#0f3f8f';
   const shop = useShop();
   const [toast, setToast] = useState('');
+  const [complain, setComplain] = useState(false);
   const [conflict, setConflict] = useState<Store['services'][number] | null>(null);
   const cartItem = (x: Store['services'][number]) => ({ serviceId: x.Id, name: x.Name, price: x.FromPrice ?? 0, image: x.ImageUrl });
   const addToCart = (x: Store['services'][number]) => {
@@ -207,6 +209,8 @@ export default function Storefront() {
               <div className="mt-4 flex gap-2"><button className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white" onClick={() => { shop.replaceWith(slug!, s.name, cartItem(conflict)); setConflict(null); setToast(t('addedToCart')); setTimeout(() => setToast(''), 2200); }}>{t('replaceCart')}</button><button className="rounded-lg border px-4 py-2 text-sm" onClick={() => setConflict(null)}>{t('cancel')}</button></div>
             </Modal>
           )}
+          <div className="px-4 pb-28 pt-4 text-center"><button onClick={() => setComplain(true)} className="text-sm text-slate-500 underline hover:text-slate-700 dark:hover:text-slate-300">{t('complain')}</button></div>
+          {complain && <ComplaintForm slug={slug!} onClose={() => setComplain(false)} />}
           {s.whatsapp && (
             <a href={`https://wa.me/${s.whatsapp}?text=${encodeURIComponent(`${t('waHello')} ${s.name}`)}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp"
               className="tile fixed bottom-5 start-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#25d366] text-white shadow-xl">

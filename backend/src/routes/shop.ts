@@ -106,3 +106,13 @@ shopRouter.get('/orders', customerAuth, h(async (req, res) => {
   const items = rows.length ? await query<Record<string, any>>(`SELECT RequestId, Name, UnitPrice, Qty FROM BookingRequestItems WHERE RequestId IN (SELECT Id FROM BookingRequests WHERE CustomerId=@i)`, { i: req.customerId }) : [];
   res.json({ items: rows.map((r) => ({ ...r, Items: items.filter((x) => x.RequestId === r.Id) })) });
 }));
+
+/** A signed-in customer complains about one of their own orders. */
+shopRouter.post('/orders/:id/complaints', customerAuth, h(async (req, res) => {
+  const id = parse(z.coerce.number().int().positive(), req.params.id);
+  const b = parse(z.object({ message: z.string().trim().min(10).max(1000) }), req.body);
+  const o = (await query<{ CompanyId: number; CustomerName: string; Phone: string }>(`SELECT CompanyId, CustomerName, Phone FROM BookingRequests WHERE Id=@i AND CustomerId=@c`, { i: id, c: req.customerId }))[0];
+  if (!o) throw new HttpError(404, 'NOT_FOUND', 'Order not found');
+  const r = await query<{ Id: number }>(`INSERT INTO Complaints (CompanyId, RequestId, CustomerId, CustomerName, Phone, Message) OUTPUT inserted.Id VALUES (@co,@r,@cu,@n,@p,@m)`, { co: o.CompanyId, r: id, cu: req.customerId, n: o.CustomerName, p: o.Phone, m: b.message });
+  res.status(201).json({ id: r[0].Id });
+}));

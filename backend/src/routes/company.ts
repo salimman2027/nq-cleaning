@@ -45,7 +45,7 @@ async function loadProfile(companyId: number) {
     documents, extractionEnabled: extractionEnabled(),
     id: c.Id, name: c.Name, slug: c.Slug, phone: c.Phone, status: c.Status, description: c.Description, logoUrl: c.LogoUrl, coverUrl: c.CoverUrl, whatsapp: c.WhatsApp,
     primaryColor: c.PrimaryColor, crNumber: c.CrNumber, vatNumber: c.VatNumber, nationalAddress: address,
-    submittedAt: c.SubmittedAt, reviewedAt: c.ReviewedAt, reviewNote: c.Status === 'rejected' ? c.ReviewNote : null,
+    submittedAt: c.SubmittedAt, reviewedAt: c.ReviewedAt, reviewNote: c.Status === 'rejected' || c.Status === 'suspended' ? c.ReviewNote : null,
     sectorCodes: sectors.map((s) => s.Code),
     missing: [...missingForReview({ name: c.Name, crNumber: c.CrNumber, vatNumber: c.VatNumber, nationalAddress: address, sectorCount: sectors.length }), ...missingDocs.map((k) => `doc:${k}`)],
   };

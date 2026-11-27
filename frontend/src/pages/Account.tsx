@@ -4,6 +4,7 @@ import { api, ApiError } from '../api';
 import { useI18n, type Key } from '../i18n';
 import { useShop } from '../shop';
 import { Button, ErrorBox, Field, Input, PasswordInput, money, Skeleton } from '../ui';
+import ComplaintForm from './ComplaintForm';
 import { PublicShell } from './Home';
 
 interface Order { Id: number; Status: string; PaymentMethod: string; PaymentStatus: string; Total: number | null; PreferredDate: string; PreferredPeriod: string; CompanyName: string; Slug: string; CreatedAt: string; Items: { Name: string; Qty: number; UnitPrice: number }[] }
@@ -16,6 +17,7 @@ export default function Account() {
   const [f, setF] = useState({ name: '', phone: '', password: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [complain, setComplain] = useState<Order | null>(null);
   const [orders, setOrders] = useState<Order[] | null>(null);
   useEffect(() => { if (customer) api<{ items: Order[] }>('/shop/orders', { customer: true }).then((r) => setOrders(r.items)).catch(() => setErr('Error')); }, [customer]);
 
@@ -72,9 +74,11 @@ export default function Account() {
               <span>{t('payCash')} · {o.PaymentStatus === 'paid' ? t('paid') : t('unpaid')}</span>
               <b>{o.Total != null ? money(o.Total, lang) : '—'}</b>
             </div>
+            <button onClick={() => setComplain(o)} className="mt-2 text-xs text-slate-500 underline">{t('complain')}</button>
           </article>
         ))}
       </div>
+      {complain && <ComplaintForm slug={complain.Slug} orderId={complain.Id} onClose={() => setComplain(null)} />}
     </PublicShell>
   );
 }

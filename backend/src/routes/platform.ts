@@ -7,8 +7,10 @@ import { invalidateCompanyStatus, requirePerm } from '../auth/middleware';
 import { send } from '../services/notify';
 import { listDocuments, sendFile } from './company';
 import { DOC_KINDS } from '../lib/documents';
+import { monitorRouter } from './monitor';
 
 export const platformRouter = Router();
+platformRouter.use(monitorRouter);
 
 const STATUSES = ['draft', 'pending_review', 'approved', 'rejected', 'suspended'] as const;
 

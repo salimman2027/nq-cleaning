@@ -84,6 +84,7 @@ export default function Company() {
         <span className="rounded-full bg-slate-200 px-3 py-1 text-xs dark:bg-slate-800">{t(`st_${p.status}` as Key)}</span>
       </div>
       {p.status === 'pending_review' && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">{t('pendingNote')}</p>}
+      {p.status === 'suspended' && <ErrorBox message={`${t('suspendedNotice')}${p.reviewNote ? `: ${p.reviewNote}` : ''}`} />}
       {p.status === 'rejected' && p.reviewNote && <ErrorBox message={`${t('rejectionReason')}: ${p.reviewNote}`} />}
       {p.status === 'draft' && p.missing.length > 0 && <p className="text-sm text-slate-500">{t('missingFields')}: {lab(p.missing)}</p>}
       {locked && <p className="text-xs text-slate-500">{t('lockedNote')}</p>}
