@@ -235,6 +235,37 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).delete(`/api/supervisors/${sup2.body.id}`).set(auth(ownerToken))).status, 204);
   });
 
+  test('messaging settings keep secrets server-side; ratings are one-time private links', async () => {
+    assert.equal((await request(app).get('/api/platform/settings/messaging').set(auth(ownerToken))).status, 403);
+    const cfg = (await request(app).get('/api/platform/settings/messaging').set(auth(platToken))).body;
+    const body = { whatsapp: { ...cfg.whatsapp, enabled: true, phoneId: '1234567890', token: 'EAAB-secret-token-9999' }, sms: { ...cfg.sms }, events: cfg.events };
+    const saved = await request(app).put('/api/platform/settings/messaging').set(auth(platToken)).send(body);
+    assert.equal(saved.status, 200);
+    assert.equal(saved.body.whatsapp.tokenSet, true);
+    assert.equal(JSON.stringify(saved.body).includes('secret-token'), false, 'the token is never returned');
+    assert.equal(saved.body.whatsapp.tokenHint, '••••9999');
+    const { query } = await import('../db');
+    const raw = (await query<{ Value: string }>(`SELECT s.Value FROM SystemSettings s JOIN Companies c ON c.Id=s.CompanyId WHERE c.IsPlatform=1 AND s.[Key]='messaging'`))[0].Value;
+    assert.equal(raw.includes('secret-token'), false, 'the token is encrypted at rest');
+    assert.equal((await request(app).put('/api/platform/settings/messaging').set(auth(platToken)).send({ ...body, whatsapp: { ...body.whatsapp, token: undefined, clearToken: true } })).status, 400, 'cannot enable without a token');
+    assert.equal((await request(app).put('/api/platform/settings/messaging').set(auth(platToken)).send({ ...body, whatsapp: { ...body.whatsapp, enabled: false, token: undefined }, sms: { ...body.sms, enabled: true, url: 'http://localhost/x', apiKey: 'abcdef123' } })).status, 400, 'sms url must be public https');
+    assert.equal((await request(app).put('/api/platform/settings/messaging').set(auth(platToken)).send({ ...body, whatsapp: { ...body.whatsapp, enabled: false, token: undefined } })).status, 200);
+    const bk = (await query<{ Id: number }>(`SELECT TOP 1 Id FROM Bookings WHERE CompanyId=@c`, { c: companyId }))[0].Id;
+    await query(`INSERT INTO Ratings (BookingId, CompanyId, Token) VALUES (@b,@c,'0123456789abcdef0123456789abcdef')`, { b: bk, c: companyId });
+    const tk = '0123456789abcdef0123456789abcdef';
+    assert.equal((await request(app).get(`/api/market/ratings/${tk}`)).body.rated, false);
+    assert.equal((await request(app).get('/api/market/ratings/ffffffffffffffffffffffffffffffff')).status, 404);
+    assert.equal((await request(app).post(`/api/market/ratings/${tk}`).send({ stars: 6 })).status, 400);
+    assert.equal((await request(app).post(`/api/market/ratings/${tk}`).send({ stars: 5, comment: 'Excellent team' })).status, 201);
+    assert.equal((await request(app).post(`/api/market/ratings/${tk}`).send({ stars: 1 })).status, 409, 'one rating per booking');
+    const mine = await request(app).get('/api/ratings').set(auth(ownerToken));
+    assert.equal(mine.body.average, 5);
+    assert.equal(mine.body.count, 1);
+    const m = await request(app).get('/api/platform/monitor?period=month').set(auth(platToken));
+    assert.equal(Number(m.body.companies.find((c: { Id: number }) => c.Id === companyId).AvgRating), 5);
+    assert.equal((await request(app).get('/api/market/config')).body.paymentMethods.filter((p: { enabled: boolean }) => p.enabled).length, 1, 'only cash is enabled');
+  });
+
   test('platform monitor counts activity per period; complaints reach the platform only', async () => {
     for (const period of ['day', 'week', 'month']) {
       const m = await request(app).get(`/api/platform/monitor?period=${period}`).set(auth(platToken));

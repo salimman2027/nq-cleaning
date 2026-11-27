@@ -8,9 +8,11 @@ import { send } from '../services/notify';
 import { listDocuments, sendFile } from './company';
 import { DOC_KINDS } from '../lib/documents';
 import { monitorRouter } from './monitor';
+import { platformSettingsRouter } from './platformSettings';
 
 export const platformRouter = Router();
 platformRouter.use(monitorRouter);
+platformRouter.use(platformSettingsRouter);
 
 const STATUSES = ['draft', 'pending_review', 'approved', 'rejected', 'suspended'] as const;
 

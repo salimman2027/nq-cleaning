@@ -25,6 +25,7 @@ monitorRouter.get('/monitor', requirePerm('platform.companies.view'), h(async (r
        (SELECT ISNULL(SUM(r.Total),0) FROM BookingRequests r WHERE r.CompanyId=c.Id AND r.PaymentStatus='paid' AND ${LOCAL('r.CreatedAt')} >= ${since}) AS Collected,
        (SELECT COUNT(*) FROM Bookings b WHERE b.CompanyId=c.Id AND b.IsDeleted=0 AND ${LOCAL('b.CreatedAt')} >= ${since}) AS Bookings,
        (SELECT COUNT(*) FROM Complaints k WHERE k.CompanyId=c.Id AND k.Status<>'resolved') AS OpenComplaints,
+       (SELECT ROUND(AVG(CAST(Stars AS FLOAT)),1) FROM Ratings r WHERE r.CompanyId=c.Id AND r.Stars IS NOT NULL) AS AvgRating, (SELECT COUNT(*) FROM Ratings r WHERE r.CompanyId=c.Id AND r.Stars IS NOT NULL) AS RatingsCount,
        (SELECT COUNT(*) FROM Complaints k WHERE k.CompanyId=c.Id AND ${LOCAL('k.CreatedAt')} >= ${since}) AS Complaints
      FROM Companies c WHERE c.IsPlatform=0 AND c.Status IN ('approved','suspended')
      ORDER BY Requests DESC, c.Name`, p);

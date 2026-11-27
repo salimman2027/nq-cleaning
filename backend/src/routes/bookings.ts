@@ -5,6 +5,8 @@ import { dt, money, query, withTx } from '../db';
 import { HttpError, h, parse } from '../errors';
 import { branchScope, requirePerm } from '../auth/middleware';
 import { backfillConfirmed } from '../services/requestSync';
+import { afterStatus } from '../services/ratings';
+import { config } from '../config';
 import { calcTotals, lineTotal } from '../lib/pricing';
 import { REASON_REQUIRED, RELEASES_ASSIGNMENTS, STATUSES, canTransition, type BookingStatus } from '../lib/transitions';
 import { assertTechniciansFree } from '../services/scheduling';
@@ -287,6 +289,7 @@ bookingsRouter.post(
       await addHistory(tx, id, bk.Status, b.status, b.reason ?? null, u.id);
       return { id, status: b.status };
     });
+    await afterStatus(u.companyId, id, b.status, config.appUrl || `https://${req.get('host')}`);
     res.json(out);
   }),
 );

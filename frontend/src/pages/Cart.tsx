@@ -7,10 +7,15 @@ import { Button, ErrorBox, money } from '../ui';
 import { AreaSelect, type ServiceArea } from '../AreaSelect';
 import { PublicShell } from './Home';
 
+const PAY_LABEL: Record<string, Key> = { cash: 'payCash', card: 'payCard', tabby: 'payTabby', tamara: 'payTamara' };
+const DEFAULT_METHODS = [{ code: 'cash', enabled: true }, { code: 'card', enabled: false }, { code: 'tabby', enabled: false }, { code: 'tamara', enabled: false }];
+
 export default function Cart() {
   const { t, lang } = useI18n();
   const { cart, customer, setQty, clear, total } = useShop();
   const nav = useNavigate();
+  const [methods, setMethods] = useState<{ code: string; enabled: boolean }[]>(DEFAULT_METHODS);
+  useEffect(() => { api<{ paymentMethods?: { code: string; enabled: boolean }[] }>('/market/config').then((r) => { if (r.paymentMethods) setMethods(r.paymentMethods); }).catch(() => undefined); }, []);
   const today = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
   const [f, setF] = useState({ date: '', period: 'morning', address: '', notes: '', pay: 'cash', city: '', district: '' });
   const [areas, setAreas] = useState<ServiceArea[]>([]);
@@ -68,8 +73,12 @@ export default function Cart() {
           <input required minLength={3} className={cls} placeholder={t('addressReq')} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
           <input className={cls} placeholder={t('notesOpt')} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
           <fieldset className="space-y-2"><legend className="mb-1 text-sm font-medium">{t('payment')}</legend>
-            <label className="flex items-center gap-2 rounded-xl border border-cyan-600 bg-cyan-50 p-3 text-sm dark:bg-slate-800"><input type="radio" name="pay" checked readOnly />{t('payCash')}</label>
-            <label className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm text-slate-400 dark:border-slate-700"><input type="radio" name="pay" disabled />{t('payCard')} <span className="ms-auto rounded bg-slate-100 px-2 text-xs dark:bg-slate-800">{t('soon')}</span></label>
+            {methods.map((m) => (
+              <label key={m.code} className={`flex items-center gap-2 rounded-xl border p-3 text-sm ${m.enabled ? 'border-cyan-600 bg-cyan-50 dark:bg-slate-800' : 'border-slate-200 text-slate-400 dark:border-slate-700'}`}>
+                <input type="radio" name="pay" disabled={!m.enabled} checked={f.pay === m.code} onChange={() => setF({ ...f, pay: m.code })} />{t(PAY_LABEL[m.code] ?? 'payCash')}
+                {!m.enabled && <span className="ms-auto rounded bg-slate-100 px-2 text-xs dark:bg-slate-800">{t('soon')}</span>}
+              </label>
+            ))}
           </fieldset>
           <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-lg font-bold dark:border-slate-800"><span>{t('total')}</span><span>{money(total, lang)}</span></div>
           {customer ? <Button type="submit" disabled={busy} className="w-full">{t('confirmOrder')}</Button> : <Link to="/account?next=cart" className="block rounded-lg bg-cyan-700 px-4 py-2.5 text-center text-sm font-medium text-white">{t('loginToOrder')}</Link>}

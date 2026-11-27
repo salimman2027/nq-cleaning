@@ -28,6 +28,7 @@ marketRouter.get('/companies', h(async (req, res) => {
   const search = q.q ? q.q.replace(/[\\%_\[]/g, '') : '';
   const items = await query(
     `SELECT c.Slug, c.Name, c.Description, c.LogoUrl, c.CoverUrl, c.PrimaryColor, c.ReviewedAt,
+            (SELECT ROUND(AVG(CAST(Stars AS FLOAT)),1) FROM Ratings r WHERE r.CompanyId=c.Id AND r.Stars IS NOT NULL) AS AvgRating, (SELECT COUNT(*) FROM Ratings r WHERE r.CompanyId=c.Id AND r.Stars IS NOT NULL) AS RatingsCount,
             (SELECT STRING_AGG(s.Code, ',') FROM CompanySectors cs JOIN Sectors s ON s.Id=cs.SectorId WHERE cs.CompanyId=c.Id) AS Sectors
        FROM Companies c
       WHERE c.Status='approved' AND c.IsDeleted=0 AND c.IsPlatform=0 AND c.Slug IS NOT NULL
@@ -59,8 +60,12 @@ marketRouter.get('/companies/:slug', h(async (req, res) => {
   const sectors = await query(`SELECT s.Code, s.NameAr, s.NameEn FROM CompanySectors cs JOIN Sectors s ON s.Id=cs.SectorId WHERE cs.CompanyId=@c`, { c: c.Id });
   const categories = await query(`SELECT Name, ImageUrl FROM ServiceCategories WHERE CompanyId=@c AND ImageUrl IS NOT NULL ORDER BY SortOrder, Id`, { c: c.Id });
   const areas = await loadAreas(c.Id);
-  res.json({ areas, categories, slug: c.Slug, name: c.Name, description: c.Description, logoUrl: c.LogoUrl, coverUrl: c.CoverUrl, whatsapp: c.WhatsApp ? '966' + String(c.WhatsApp).slice(1) : null, primaryColor: c.PrimaryColor, sectors, services });
+  const rate = (await query<{ AvgRating: number | null; RatingsCount: number }>(`SELECT ROUND(AVG(CAST(Stars AS FLOAT)),1) AS AvgRating, COUNT(*) AS RatingsCount FROM Ratings WHERE CompanyId=@c AND Stars IS NOT NULL`, { c: c.Id }))[0];
+  res.json({ rating: { average: rate.AvgRating, count: Number(rate.RatingsCount) }, areas, categories, slug: c.Slug, name: c.Name, description: c.Description, logoUrl: c.LogoUrl, coverUrl: c.CoverUrl, whatsapp: c.WhatsApp ? '966' + String(c.WhatsApp).slice(1) : null, primaryColor: c.PrimaryColor, sectors, services });
 }));
+
+/** Only cash works today. Card, Tabby and Tamara are shown as coming soon until a payment gateway is connected. */
+export const PAYMENT_METHODS = [{ code: 'cash', enabled: true }, { code: 'card', enabled: false }, { code: 'tabby', enabled: false }, { code: 'tamara', enabled: false }];
 
 const requestLimiter = rateLimit({ windowMs: 10 * 60_000, limit: 8, standardHeaders: true, legacyHeaders: false, skip: () => config.env === 'test' });
 const riyadhToday = (): string => new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
@@ -110,6 +115,30 @@ marketRouter.post('/companies/:slug/complaints', complaintLimiter, h(async (req,
   res.status(201).json({ id: r[0].Id });
 }));
 
+const rateLimiter = rateLimit({ windowMs: 10 * 60_000, limit: 30, standardHeaders: true, legacyHeaders: false, skip: () => config.env === 'test' });
+const tokenSchema = z.string().regex(/^[a-f0-9]{32}$/);
+/** The private rating page: what is being rated, and whether it was already rated. */
+marketRouter.get('/ratings/:token', rateLimiter, h(async (req, res) => {
+  const token = parse(tokenSchema, req.params.token);
+  const r = (await query<Record<string, any>>(
+    `SELECT r.Stars, r.Comment, r.SubmittedAt, co.Name AS Company, co.Slug, b.BookingNo,
+            STUFF((SELECT ', ' + s.Name FROM BookingDetails d JOIN Services s ON s.Id=d.ServiceId WHERE d.BookingId=b.Id FOR XML PATH('')), 1, 2, '') AS Services
+       FROM Ratings r JOIN Bookings b ON b.Id=r.BookingId JOIN Companies co ON co.Id=r.CompanyId WHERE r.Token=@t`, { t: token }))[0];
+  if (!r) throw new HttpError(404, 'NOT_FOUND', 'Rating link not found');
+  res.json({ company: r.Company, slug: r.Slug, bookingNo: r.BookingNo, services: r.Services, rated: !!r.SubmittedAt, stars: r.Stars, comment: r.Comment });
+}));
+
+marketRouter.post('/ratings/:token', rateLimiter, h(async (req, res) => {
+  const token = parse(tokenSchema, req.params.token);
+  const b = parse(z.object({ stars: z.number().int().min(1).max(5), comment: z.string().trim().max(500).optional() }), req.body);
+  const r = await query(`UPDATE Ratings SET Stars=@s, Comment=@c, SubmittedAt=SYSUTCDATETIME() OUTPUT INSERTED.Id WHERE Token=@t AND SubmittedAt IS NULL`, { s: b.stars, c: b.comment || null, t: token });
+  if (!r[0]) {
+    const ex = await query(`SELECT 1 AS x FROM Ratings WHERE Token=@t`, { t: token });
+    throw new HttpError(ex[0] ? 409 : 404, ex[0] ? 'ALREADY_RATED' : 'NOT_FOUND', ex[0] ? 'This service was already rated' : 'Rating link not found');
+  }
+  res.status(201).json({ ok: true });
+}));
+
 /** Cities and suggested districts for the area pickers. */
 marketRouter.get('/areas-catalog', (_req, res) => { res.json({ cities: CITIES, districts: DISTRICT_SUGGESTIONS }); });
 
@@ -120,5 +149,5 @@ marketRouter.get('/brand', h(async (_req, res) => {
 
 /** What the sign-up and sign-in screens should offer. */
 marketRouter.get('/config', (_req, res) => {
-  res.json({ phoneVerification: config.otp.required });
+  res.json({ phoneVerification: config.otp.required, paymentMethods: PAYMENT_METHODS });
 });

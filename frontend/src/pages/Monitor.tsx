@@ -6,7 +6,7 @@ import { useI18n, type Key } from '../i18n';
 import { Button, ErrorBox, Modal, Skeleton, money } from '../ui';
 
 type Period = 'day' | 'week' | 'month';
-interface Row { Id: number; Name: string; Slug: string; Status: string; ReviewNote: string | null; Requests: number; Confirmed: number; Cancelled: number; Waiting: number; Value: number; Collected: number; Bookings: number; OpenComplaints: number; Complaints: number }
+interface Row { AvgRating: number | null; RatingsCount: number; Id: number; Name: string; Slug: string; Status: string; ReviewNote: string | null; Requests: number; Confirmed: number; Cancelled: number; Waiting: number; Value: number; Collected: number; Bookings: number; OpenComplaints: number; Complaints: number }
 interface Data { totals: { companies: number; requests: number; bookings: number; value: number; collected: number; complaints: number; openComplaints: number }; series: { date: string; count: number }[]; companies: Row[] }
 
 /** Platform owner's view of what each company did, by day / week / month, with suspend and reactivate. */
@@ -71,7 +71,7 @@ export default function Monitor() {
             <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
               <table className="w-full min-w-[760px] text-sm">
                 <thead className="text-start text-xs text-slate-500"><tr>
-                  {['company', 'requests', 'waitingLbl', 'confirmedLbl', 'cancelledLbl', 'bookings', 'ordersValue', 'collected', 'complaintsLbl', ''].map((k, i) => <th key={i} className="px-3 py-2 text-start font-medium">{k && t(k as Key)}</th>)}
+                  {['company', 'requests', 'waitingLbl', 'confirmedLbl', 'cancelledLbl', 'bookings', 'ordersValue', 'collected', 'complaintsLbl', 'avgRating', ''].map((k, i) => <th key={i} className="px-3 py-2 text-start font-medium">{k && t(k as Key)}</th>)}
                 </tr></thead>
                 <tbody>
                   {data.companies.map((c) => (
@@ -80,6 +80,7 @@ export default function Monitor() {
                       <td className="px-3 py-2 font-semibold">{c.Requests}</td><td className="px-3 py-2">{c.Waiting}</td><td className="px-3 py-2">{c.Confirmed}</td><td className="px-3 py-2">{c.Cancelled}</td><td className="px-3 py-2">{c.Bookings}</td>
                       <td className="px-3 py-2">{money(c.Value, lang)}</td><td className="px-3 py-2">{money(c.Collected, lang)}</td>
                       <td className="px-3 py-2">{c.OpenComplaints > 0 ? <Link to={`/app/complaints?companyId=${c.Id}`} className="font-semibold text-red-600">{c.OpenComplaints}</Link> : 0}</td>
+                      <td className="px-3 py-2">{c.AvgRating != null ? `${c.AvgRating}★ (${c.RatingsCount})` : '-'}</td>
                       <td className="px-3 py-2 text-end">{can('platform.companies.review') && <Button variant={c.Status === 'suspended' ? 'ghost' : 'danger'} onClick={() => { setTarget(c); setReason(''); }}>{c.Status === 'suspended' ? t('reactivate') : t('suspend')}</Button>}</td>
                     </tr>
                   ))}

@@ -3,6 +3,7 @@ import { api, ApiError } from '../api';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 import { Button, ErrorBox, Field, Input } from '../ui';
+import MessagingSettings from './MessagingSettings';
 
 export default function Settings() {
   const { t } = useI18n();
@@ -17,7 +18,7 @@ export default function Settings() {
     catch (e) { setError(e instanceof ApiError ? e.message : 'Error'); }
   };
   return (
-    <div className="mx-auto max-w-lg space-y-4">
+    <div className="mx-auto max-w-lg space-y-6">
       <h1 className="text-xl font-bold">{t('settings')}</h1>
       {error && <ErrorBox message={error} />}
       {msg && <p className="text-sm text-green-700">{msg}</p>}
@@ -28,6 +29,7 @@ export default function Settings() {
           <div className="flex gap-2"><Button onClick={() => save(logo.trim() || null)}>{t('save')}</Button><Button variant="ghost" onClick={() => save(null)}>{t('removeLogo')}</Button></div>
         )}
       </div>
+      {can('platform.brand.manage') && <MessagingSettings />}
     </div>
   );
 }

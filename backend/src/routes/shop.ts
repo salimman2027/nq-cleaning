@@ -73,12 +73,12 @@ const orderSchema = z.object({
   district: z.string().trim().max(80).optional(),
   address: z.string().trim().min(3).max(300),
   notes: z.string().trim().max(500).optional(),
-  paymentMethod: z.enum(['cash', 'card']),
+  paymentMethod: z.enum(['cash', 'card', 'tabby', 'tamara']),
 });
 
 shopRouter.post('/orders', customerAuth, h(async (req, res) => {
   const b = parse(orderSchema, req.body);
-  if (b.paymentMethod === 'card') throw new HttpError(400, 'CARD_NOT_AVAILABLE', 'Card payment is not available yet');
+  if (b.paymentMethod !== 'cash') throw new HttpError(400, 'METHOD_NOT_AVAILABLE', 'This payment method is not available yet');
   const today = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
   const max = new Date(Date.parse(today) + 90 * 86400_000).toISOString().slice(0, 10);
   if (b.date < today || b.date > max) throw new HttpError(400, 'BAD_DATE', 'Choose a date within the next 90 days');

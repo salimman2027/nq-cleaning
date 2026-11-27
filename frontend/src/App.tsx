@@ -25,6 +25,8 @@ import Finance from './pages/Finance';
 import StaffReport from './pages/StaffReport';
 import Review from './pages/Review';
 import Settings from './pages/Settings';
+import Ratings from './pages/Ratings';
+import Rate from './pages/Rate';
 
 const NAV: { to: string; key: Key; perm: string; icon: string }[] = [
   { to: '/app/review', key: 'review', perm: 'platform.companies.view', icon: '✅' },
@@ -39,6 +41,7 @@ const NAV: { to: string; key: Key; perm: string; icon: string }[] = [
   { to: '/app/technicians', key: 'technicians', perm: 'technicians.view', icon: '🧹' },
   { to: '/app/supervisors', key: 'supervisors', perm: 'technicians.view', icon: '🧑‍💼' },
   { to: '/app/staff-report', key: 'staffReport', perm: 'finance.view_cost', icon: '📈' },
+  { to: '/app/ratings', key: 'ratingsTitle', perm: 'bookings.view', icon: '⭐' },
   { to: '/app/finance', key: 'finance', perm: 'finance.view_cost', icon: '💰' },
   { to: '/app/categories', key: 'categories', perm: 'services.view', icon: '🗂' },
   { to: '/app/services', key: 'services', perm: 'services.view', icon: '🛠' },
@@ -111,6 +114,7 @@ export default function App() {
       <Route path="/c/:slug" element={<Storefront />} />
       <Route path="/account" element={<Account />} />
       <Route path="/cart" element={<Cart />} />
+      <Route path="/rate/:token" element={<Rate />} />
       <Route path="/join" element={me ? <Navigate to="/app" replace /> : <Register />} />
       <Route path="/login" element={me ? <Navigate to="/app" replace /> : <Login />} />
       <Route path="/app" element={<Layout />}>
@@ -124,6 +128,7 @@ export default function App() {
         <Route path="bookings" element={<Bookings />} />
         <Route path="customers" element={<Customers />} />
         <Route path="supervisors" element={<Supervisors />} />
+        <Route path="ratings" element={<Ratings />} />
         <Route path="finance" element={<Finance />} />
         <Route path="staff-report" element={<StaffReport />} />
         <Route path="technicians" element={<Technicians />} />
