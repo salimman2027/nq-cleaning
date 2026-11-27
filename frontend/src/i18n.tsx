@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 const dict = {
   ar: {
-    app: 'NQ Cleaning', login: 'تسجيل الدخول', email: 'البريد الإلكتروني', password: 'كلمة المرور', logout: 'خروج',
+    app: 'فزعتك', login: 'تسجيل الدخول', email: 'البريد الإلكتروني', password: 'كلمة المرور', logout: 'خروج',
     dashboard: 'لوحة التحكم', bookings: 'الحجوزات', customers: 'العملاء', technicians: 'الفنيون', services: 'الخدمات',
     newBooking: 'حجز جديد', newCustomer: 'عميل جديد', save: 'حفظ', cancel: 'إلغاء', search: 'بحث', loading: 'جاري التحميل…',
     name: 'الاسم', mobile: 'الجوال', code: 'الكود', status: 'الحالة', total: 'الإجمالي', date: 'التاريخ', price: 'السعر', minutes: 'المدة (دقيقة)',
@@ -25,7 +25,7 @@ const dict = {
     signInPhone: 'الدخول بالجوال', signInEmail: 'الدخول بالبريد', verify: 'تحقق',
   },
   en: {
-    app: 'NQ Cleaning', login: 'Sign in', email: 'Email', password: 'Password', logout: 'Sign out',
+    app: 'Faz3tak', login: 'Sign in', email: 'Email', password: 'Password', logout: 'Sign out',
     dashboard: 'Dashboard', bookings: 'Bookings', customers: 'Customers', technicians: 'Technicians', services: 'Services',
     newBooking: 'New booking', newCustomer: 'New customer', save: 'Save', cancel: 'Cancel', search: 'Search', loading: 'Loading…',
     name: 'Name', mobile: 'Mobile', code: 'Code', status: 'Status', total: 'Total', date: 'Date', price: 'Price', minutes: 'Duration (min)',

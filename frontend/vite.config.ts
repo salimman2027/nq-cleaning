@@ -10,8 +10,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'NQ Cleaning',
-        short_name: 'NQ Cleaning',
+        name: 'فزعتك',
+        short_name: 'فزعتك',
         lang: 'ar',
         dir: 'rtl',
         start_url: '/',

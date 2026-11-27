@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query } from '../db';
 import { HttpError, h, parse } from '../errors';
 import { requirePerm } from '../auth/middleware';
+import { backfillConfirmed, bookFromRequest } from '../services/requestSync';
 
 /** Booking requests received from the public storefront, for the company's own staff. */
 export const requestsRouter = Router();
@@ -11,6 +12,7 @@ requestsRouter.get(
   '/',
   requirePerm('bookings.view'),
   h(async (req, res) => {
+    await backfillConfirmed(req.user!.companyId, req.user!.id);
     const items = await query(
       `SELECT r.Id, r.PaymentMethod, r.PaymentStatus, r.Total, r.CustomerName, r.Phone, r.Address, r.PreferredDate, r.PreferredPeriod, r.Notes, r.Status, r.CreatedAt, s.Name AS ServiceName
          FROM BookingRequests r JOIN Services s ON s.Id=r.ServiceId
@@ -43,6 +45,7 @@ requestsRouter.patch(
     const { status } = parse(z.object({ status: z.enum(['contacted', 'confirmed', 'cancelled']) }), req.body);
     const r = await query(`UPDATE BookingRequests SET Status=@s, UpdatedAt=SYSUTCDATETIME() OUTPUT inserted.Id WHERE Id=@i AND CompanyId=@c`, { s: status, i: id, c: req.user!.companyId });
     if (!r.length) throw new HttpError(404, 'NOT_FOUND', 'Request not found');
-    res.json({ id, status });
+    const bookingId = status === 'confirmed' ? await bookFromRequest(req.user!.companyId, id, req.user!.id) : null;
+    res.json({ id, status, bookingId });
   }),
 );

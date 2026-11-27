@@ -1,3 +1,4 @@
+import { LogoMark } from '../Logo';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
@@ -48,7 +49,7 @@ export default function Login() {
   return (
     <div className="grid min-h-full lg:grid-cols-2 dark:bg-slate-950 dark:text-slate-100">
       <aside className="lattice hidden flex-col justify-between bg-cyan-900 p-10 text-white lg:flex">
-        <Link to="/" className="flex items-center gap-2.5 text-lg font-bold"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-accent)] text-base text-cyan-950">NQ</span>{t('app')}</Link>
+        <Link to="/" className="flex items-center gap-2.5 text-lg font-bold"><LogoMark className="h-9 w-9" />{t('app')}</Link>
         <div><p className="max-w-sm text-3xl font-bold leading-snug">{t('marketTitle')}</p><p className="mt-3 max-w-sm text-white/70">{t('marketSub')}</p></div>
         <Link to="/join" className="text-sm text-white/80 hover:text-white">{t('joinAsCompany')}</Link>
       </aside>

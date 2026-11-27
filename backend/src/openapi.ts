@@ -3,7 +3,7 @@ const op = (summary: string, perm?: string) => ({ summary: perm ? `${summary} (r
 
 export const openapi = {
   openapi: '3.0.3',
-  info: { title: 'NQ Cleaning API', version: '0.1.0' },
+  info: { title: 'Faz3tak API', version: '0.1.0' },
   servers: [{ url: '/api' }],
   components: { securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } } },
   paths: {

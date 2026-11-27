@@ -146,6 +146,15 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal(list.body.items.length, 1);
     assert.equal((await request(app).get('/api/requests').set(auth(platToken))).status, 403);
     assert.equal((await request(app).patch(`/api/requests/${list.body.items[0].Id}`).set(auth(ownerToken)).send({ status: 'contacted' })).status, 200);
+    const conf = await request(app).patch(`/api/requests/${list.body.items[0].Id}`).set(auth(ownerToken)).send({ status: 'confirmed' });
+    assert.equal(conf.status, 200);
+    assert.ok(conf.body.bookingId, 'confirming creates a booking');
+    const again = await request(app).patch(`/api/requests/${list.body.items[0].Id}`).set(auth(ownerToken)).send({ status: 'confirmed' });
+    assert.equal(again.body.bookingId, conf.body.bookingId, 'confirming twice does not create a second booking');
+    const bk = await request(app).get('/api/bookings').set(auth(ownerToken));
+    assert.equal(bk.body.items.length, 1);
+    const cu = await request(app).get('/api/customers').set(auth(ownerToken));
+    assert.equal(cu.body.items.some((c: { Mobile: string }) => c.Mobile.endsWith('551112233')), true);
     const cover = await request(app).put('/api/company').set(auth(ownerToken)).send({ coverUrl: 'https://example.test/c.jpg' });
     assert.equal(cover.body.coverUrl, 'https://example.test/c.jpg');
     assert.equal((await request(app).put('/api/company').set(auth(ownerToken)).send({ coverUrl: 'http://example.test/c.jpg' })).status, 400);

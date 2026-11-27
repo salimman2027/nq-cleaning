@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { useShop } from '../shop';
+import { LogoMark } from '../Logo';
 import { ZoomControl } from '../ui';
 import { useI18n } from '../i18n';
 import { SectorIcon } from '../sectorIcons';
@@ -24,7 +25,7 @@ export function PublicShell({ children, flush = false }: { children: ReactNode; 
       <header className="lattice bg-cyan-900 text-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4">
           <Link to="/" className="flex items-center gap-2.5 text-lg font-bold">
-            {logo ? <img src={logo} alt="" className="h-9 w-auto" /> : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-accent)] text-base font-bold text-cyan-950">NQ</span>}
+            {logo ? <img src={logo} alt="" className="h-9 w-auto" /> : <LogoMark className="h-10 w-10" />}
             <span>{t('app')}</span>
           </Link>
           <nav className="flex items-center gap-2 text-sm">

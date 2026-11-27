@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { query, withTx } from '../db';
 import { HttpError, h, parse } from '../errors';
+import { backfillConfirmed } from '../services/requestSync';
 import { requirePerm } from '../auth/middleware';
 import { escapeLike, normalizeMobile } from '../lib/phone';
 
@@ -35,6 +36,7 @@ customersRouter.get(
   '/',
   requirePerm('customers.view'),
   h(async (req, res) => {
+    await backfillConfirmed(req.user!.companyId, req.user!.id);
     const q = parse(z.object({ q: z.string().max(100).optional(), page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(25) }), req.query);
     const like = q.q ? `%${escapeLike(q.q.trim())}%` : null;
     const digits = q.q ? normalizeMobile(q.q) : '';

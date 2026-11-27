@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { dt, money, query, withTx } from '../db';
 import { HttpError, h, parse } from '../errors';
 import { branchScope, requirePerm } from '../auth/middleware';
+import { backfillConfirmed } from '../services/requestSync';
 import { calcTotals, lineTotal } from '../lib/pricing';
 import { REASON_REQUIRED, RELEASES_ASSIGNMENTS, STATUSES, canTransition, type BookingStatus } from '../lib/transitions';
 import { assertTechniciansFree } from '../services/scheduling';
@@ -61,6 +62,7 @@ bookingsRouter.get(
   '/',
   requirePerm('bookings.view'),
   h(async (req, res) => {
+    await backfillConfirmed(req.user!.companyId, req.user!.id);
     const q = parse(
       z.object({
         from: z.coerce.date().optional(), to: z.coerce.date().optional(),

@@ -3,6 +3,7 @@ import { Navigate, NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth';
 import { useI18n, type Key } from './i18n';
 import { Skeleton, ZoomControl } from './ui';
+import { LogoMark } from './Logo';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Bookings from './pages/Bookings';
@@ -57,7 +58,7 @@ function Layout() {
   return (
     <div className="flex h-full bg-[#f4f6fa] text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <aside className={`${open ? 'w-60' : 'w-16'} lattice hidden shrink-0 flex-col bg-cyan-900 text-white transition-all md:flex`}>
-        <button onClick={() => setOpen(!open)} className="flex items-center gap-2.5 p-4 text-start text-lg font-bold"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent)] text-base text-cyan-950">NQ</span>{open && <span>{t('app')}</span>}</button>
+        <button onClick={() => setOpen(!open)} className="flex items-center gap-2.5 p-4 text-start text-lg font-bold"><LogoMark className="h-9 w-9" />{open && <span>{t('app')}</span>}</button>
         <nav className="flex-1 space-y-1 px-2">
           {links.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.to === '/app'} className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${isActive ? 'bg-white font-semibold text-cyan-900' : 'text-white/80 hover:bg-white/10'}`}>

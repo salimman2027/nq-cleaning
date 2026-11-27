@@ -99,11 +99,11 @@ export default function Storefront() {
             <div className="mx-auto grid max-w-5xl items-center gap-8 px-4 py-10 md:grid-cols-2 md:py-14">
               <div className="rise">
                 <Link to="/" className="text-sm text-slate-500 hover:text-slate-800">← {t('back')}</Link>
-                <div className="mt-4 flex items-center gap-3">
-                  <span className="logo-pop flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white text-2xl font-bold shadow ring-1 ring-slate-200" style={{ color }}>
-                    {s.logoUrl ? <img src={s.logoUrl} alt="" className="h-full w-full object-cover" /> : s.name.slice(0, 1)}
+                <div className="mt-5 flex items-center gap-4">
+                  <span className="logo-pop flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-white text-4xl font-bold shadow-lg ring-1 ring-slate-200 sm:h-28 sm:w-28" style={{ color }}>
+                    {s.logoUrl ? <img src={s.logoUrl} alt="" className="h-full w-full object-contain p-1.5" /> : s.name.slice(0, 1)}
                   </span>
-                  <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">{s.name}</span>
+                  <span className="text-2xl font-bold leading-tight sm:text-3xl">{s.name}</span>
                 </div>
                 <h1 className="mt-4 text-3xl font-bold leading-[1.3] sm:text-5xl sm:leading-[1.25]">{t('storeHeadline1')}<br /><span style={{ color }}>{t('storeHeadline2')}</span></h1>
                 {s.description && <p className="mt-4 max-w-md text-slate-600 dark:text-slate-300">{s.description}</p>}
