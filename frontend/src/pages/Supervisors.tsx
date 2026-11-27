@@ -25,7 +25,7 @@ export default function Supervisors() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between"><h1 className="text-xl font-bold">{t('supervisors')}</h1>{manage && <Button onClick={() => setAdding(true)}>+ {t('supervisor')}</Button>}</div>
+      <div className="flex items-center justify-between"><h1 className="text-xl font-bold">{t('supervisors')}</h1>{manage && <div className="flex gap-2"><Button variant="ghost" onClick={async () => { try { await api('/supervisors/test-team', { method: 'POST' }); load(); } catch (e) { setErr(e instanceof Error ? e.message : 'Error'); } }}>{t('createTestTeam')}</Button><Button onClick={() => setAdding(true)}>+ {t('supervisor')}</Button></div>}</div>
       {err && <ErrorBox message={err} />}
       {!data ? <Skeleton rows={4} /> : (
         <>

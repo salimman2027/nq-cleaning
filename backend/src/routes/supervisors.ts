@@ -36,6 +36,24 @@ supervisorsRouter.post('/', requirePerm('technicians.manage'), h(async (req, res
   res.status(201).json({ id: Number(r[0].Id) });
 }));
 
+/** One click: 5 supervisors with 5 technicians each, named for testing. Rename them afterwards. */
+supervisorsRouter.post('/test-team', requirePerm('technicians.manage'), h(async (req, res) => {
+  const c = req.user!.companyId;
+  const br = (await query<{ Id: number }>(`SELECT TOP 1 Id FROM Branches WHERE CompanyId=@c AND IsDeleted=0 AND (@b IS NULL OR Id=@b) ORDER BY Id`, { c, b: branchScope(req.user!) }))[0];
+  if (!br) throw new HttpError(400, 'VALIDATION_ERROR', 'Unknown branch');
+  const dup = await query(`SELECT 1 AS x FROM Supervisors WHERE CompanyId=@c AND IsDeleted=0 AND FullName LIKE N'مشرف [1-5]'`, { c });
+  if (dup[0]) throw new HttpError(409, 'ALREADY_EXISTS', 'Test supervisors already exist');
+  await withTx(async (tx) => {
+    for (let s = 1; s <= 5; s++) {
+      const sid = (await tx.query<{ Id: number }>(`INSERT INTO Supervisors (CompanyId, BranchId, FullName, MaxBookingsPerDay) OUTPUT INSERTED.Id VALUES (@c,@b,@n,10)`, { c, b: br.Id, n: `مشرف ${s}` }))[0].Id;
+      for (let k = 1; k <= 5; k++) {
+        await tx.query(`INSERT INTO Technicians (CompanyId, BranchId, Code, FullName, SupervisorId) VALUES (@c,@b,'T-' + RIGHT('000000' + CAST(NEXT VALUE FOR TechnicianCodeSeq AS VARCHAR(12)), 6),@n,@s)`, { c, b: br.Id, n: `فني ${s}-${k}`, s: sid });
+      }
+    }
+  });
+  res.status(201).json({ supervisors: 5, technicians: 25 });
+}));
+
 supervisorsRouter.put('/:id', requirePerm('technicians.manage'), h(async (req, res) => {
   const id = parse(idParam, req.params.id);
   const b = parse(body.omit({ branchId: true }), req.body);

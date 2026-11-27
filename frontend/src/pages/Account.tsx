@@ -19,6 +19,7 @@ export default function Account() {
   const [busy, setBusy] = useState(false);
   const [complain, setComplain] = useState<Order | null>(null);
   const [orders, setOrders] = useState<Order[] | null>(null);
+  const claim = async () => { try { await api('/shop/orders/claim', { method: 'POST', customer: true }); const r = await api<{ items: Order[] }>('/shop/orders', { customer: true }); setOrders(r.items); } catch { /* ignore */ } };
   useEffect(() => { if (customer) api<{ items: Order[] }>('/shop/orders', { customer: true }).then((r) => { setOrders(r.items); if (r.items.some((o) => o.Unseen)) api('/shop/orders/seen', { method: 'POST', customer: true }).then(refresh).catch(() => undefined); }).catch(() => setErr('Error')); }, [customer]);
 
   const submit = async (e: FormEvent) => {
@@ -66,7 +67,7 @@ export default function Account() {
           </div>
         ))}
         {!orders ? <Skeleton rows={3} /> : orders.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center dark:border-slate-700"><p>{t('noOrders')}</p><Link to="/" className="mt-3 inline-block rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white">{t('browseStores')}</Link></div>
+          <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center dark:border-slate-700"><p>{t('noOrders')}</p><button type="button" onClick={claim} className="mt-3 block w-full text-sm text-cyan-800 underline dark:text-cyan-300">{t('claimOrders')}</button><Link to="/" className="mt-3 inline-block rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white">{t('browseStores')}</Link></div>
         ) : orders.map((o) => (
           <article key={o.Id} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
             <div className="flex flex-wrap items-center justify-between gap-2">

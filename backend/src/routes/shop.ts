@@ -130,6 +130,13 @@ shopRouter.post('/orders/:id/complaints', customerAuth, h(async (req, res) => {
   res.status(201).json({ id: r[0].Id });
 }));
 
+/** Attach earlier visitor requests made with this mobile number (before the account existed). The number is not verified, so the customer asks for it explicitly. */
+shopRouter.post('/orders/claim', customerAuth, h(async (req, res) => {
+  const me = (await query<{ Phone: string }>(`SELECT Phone FROM MarketplaceCustomers WHERE Id=@c AND IsDeleted=0`, { c: req.customerId }))[0];
+  const r = me ? await query(`UPDATE BookingRequests SET CustomerId=@c OUTPUT INSERTED.Id WHERE CustomerId IS NULL AND Phone=@p`, { c: req.customerId, p: me.Phone }) : [];
+  res.json({ linked: r.length });
+}));
+
 /** The customer has looked at the status changes. */
 shopRouter.post('/orders/seen', customerAuth, h(async (req, res) => {
   await query(`UPDATE BookingRequests SET CustomerSeenStatus=Status WHERE CustomerId=@c AND (CustomerSeenStatus IS NULL OR CustomerSeenStatus<>Status)`, { c: req.customerId });

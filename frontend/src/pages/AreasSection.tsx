@@ -20,6 +20,7 @@ export default function AreasSection({ canEdit, onSaved }: { canEdit: boolean; o
   const has = (c: string) => areas.some((a) => a.city === c);
   const toggle = (c: string) => setAreas(has(c) ? areas.filter((a) => a.city !== c) : [...areas, { city: c, districts: [] }]);
   const addD = (c: string, d: string) => { const v = d.trim(); if (v.length < 2) return; setAreas(areas.map((a) => (a.city === c && !a.districts.includes(v) ? { ...a, districts: [...a.districts, v] } : a))); setDraft({ ...draft, [c]: '' }); };
+  const allD = (c: string) => setAreas(areas.map((a) => (a.city === c ? { ...a, districts: Array.from(new Set([...a.districts, ...(cat?.districts[c] ?? [])])) } : a)));
   const rmD = (c: string, d: string) => setAreas(areas.map((a) => (a.city === c ? { ...a, districts: a.districts.filter((x) => x !== d) } : a)));
   const save = async () => {
     setErr(''); setMsg('');
@@ -47,6 +48,7 @@ export default function AreasSection({ canEdit, onSaved }: { canEdit: boolean; o
               <input list={`dl-${a.city}`} value={draft[a.city] ?? ''} onChange={(e) => setDraft({ ...draft, [a.city]: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addD(a.city, draft[a.city] ?? ''); } }} placeholder={t('addDistrict')} className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800" />
               <datalist id={`dl-${a.city}`}>{(cat?.districts[a.city] ?? []).filter((d) => !a.districts.includes(d)).map((d) => <option key={d} value={d} />)}</datalist>
               <Button type="button" variant="ghost" onClick={() => addD(a.city, draft[a.city] ?? '')}>{t('add')}</Button>
+              <Button type="button" variant="ghost" onClick={() => allD(a.city)}>{t('addAllDistricts')}</Button>
             </div>
           )}
         </div>

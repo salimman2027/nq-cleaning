@@ -113,7 +113,7 @@ function BookingDetail({ id, onClose, onChanged }: { id: number; onClose: () => 
             {d.assignments.filter((a) => a.IsActive).map((a) => <div key={a.Id}>{a.FullName}</div>)}
             {d.assignments.every((a) => !a.IsActive) && <span className="text-slate-500">—</span>}
           </div>
-          {can('bookings.assign') && !['closed', 'cancelled'].includes(d.Status) && <SupervisorPicker booking={d} onDone={() => { load(); onChanged(); }} onError={setErr} />}
+          {can('bookings.assign') && !['closed', 'cancelled'].includes(d.Status) && !['new', 'confirmed', 'awaiting_assignment', 'assigned', 'redo'].includes(d.Status) && <SupervisorPicker booking={d} onDone={() => { load(); onChanged(); }} onError={setErr} />}
           {can('bookings.assign') && ['new', 'confirmed', 'awaiting_assignment', 'assigned', 'redo'].includes(d.Status) && <AssignPanel booking={d} onDone={() => { load(); onChanged(); }} onError={setErr} />}
           {can('bookings.status') && NEXT[d.Status]?.length > 0 && (
             <div className="flex flex-wrap gap-2">{NEXT[d.Status].map((s) => <Button key={s} variant={s === 'cancelled' ? 'danger' : 'ghost'} onClick={() => change(s)}>{label(s)}</Button>)}</div>
