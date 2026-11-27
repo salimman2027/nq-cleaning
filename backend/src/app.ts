@@ -27,7 +27,9 @@ export function createApp(): express.Express {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1); // behind IIS ARR / nginx
-  app.use(helmet());
+  // The default CSP adds "upgrade-insecure-requests", which blanks the page on a host that has no HTTPS certificate yet.
+  // HTTPS is enforced by the host (IIS / the hosting panel), not by this header.
+  app.use(helmet({ contentSecurityPolicy: { useDefaults: true, directives: { 'upgrade-insecure-requests': null } }, hsts: false }));
   app.use(
     cors({
       origin: (origin, cb) => {
