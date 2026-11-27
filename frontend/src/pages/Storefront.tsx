@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type PointerEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useI18n, type Key } from '../i18n';
 import { SectorIcon } from '../sectorIcons';
@@ -66,14 +66,20 @@ export default function Storefront() {
   }, [slug, t]);
   const color = s?.primaryColor ?? '#0f3f8f';
   const shop = useShop();
-  const [toast, setToast] = useState('');
+  const [added, setAdded] = useState(false);
+  const nav = useNavigate();
   const [complain, setComplain] = useState(false);
   const [conflict, setConflict] = useState<Store['services'][number] | null>(null);
   const cartItem = (x: Store['services'][number]) => ({ serviceId: x.Id, name: x.Name, price: x.FromPrice ?? 0, image: x.ImageUrl });
+  const afterAdd = () => {
+    setDetail(null);
+    if (!shop.customer) { nav('/account?mode=register&next=cart'); return; }
+    setAdded(true);
+  };
   const addToCart = (x: Store['services'][number]) => {
     if (x.FromPrice == null) return;
     if (shop.add(slug!, s!.name, cartItem(x)) === 'other-company') { setConflict(x); return; }
-    setDetail(null); setToast(t('addedToCart')); setTimeout(() => setToast(''), 2200);
+    afterAdd();
   };
   const [picked, setPicked] = useState('');
   const [detail, setDetail] = useState<Store['services'][number] | null>(null);
@@ -202,11 +208,18 @@ export default function Storefront() {
             </section>
             {s.services.length > 0 && <RequestForm store={s} color={color} picked={picked} />}
           </main>
-          {toast && <div role="status" className="rise fixed inset-x-0 bottom-24 z-40 mx-auto w-fit rounded-full bg-slate-900 px-5 py-2.5 text-sm text-white shadow-xl">{toast} · <Link to="/cart" className="underline">{t('cart')}</Link></div>}
+          {added && (
+            <Modal title={t('addedToCart')} onClose={() => setAdded(false)}>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button className="flex-1 rounded-xl border px-4 py-3 font-medium dark:border-slate-700" onClick={() => setAdded(false)}>{t('continueShopping')}</button>
+                <button className="tile flex-1 rounded-xl px-4 py-3 font-semibold text-white" style={{ background: color }} onClick={() => nav('/cart')}>{t('goToCart')}</button>
+              </div>
+            </Modal>
+          )}
           {conflict && (
             <Modal title={t('otherCompanyTitle')} onClose={() => setConflict(null)}>
               <p className="text-sm">{t('otherCompanyText')}</p>
-              <div className="mt-4 flex gap-2"><button className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white" onClick={() => { shop.replaceWith(slug!, s.name, cartItem(conflict)); setConflict(null); setToast(t('addedToCart')); setTimeout(() => setToast(''), 2200); }}>{t('replaceCart')}</button><button className="rounded-lg border px-4 py-2 text-sm" onClick={() => setConflict(null)}>{t('cancel')}</button></div>
+              <div className="mt-4 flex gap-2"><button className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white" onClick={() => { shop.replaceWith(slug!, s.name, cartItem(conflict)); setConflict(null); afterAdd(); }}>{t('replaceCart')}</button><button className="rounded-lg border px-4 py-2 text-sm" onClick={() => setConflict(null)}>{t('cancel')}</button></div>
             </Modal>
           )}
           <div className="px-4 pb-28 pt-4 text-center"><button onClick={() => setComplain(true)} className="text-sm text-slate-500 underline hover:text-slate-700 dark:hover:text-slate-300">{t('complain')}</button></div>

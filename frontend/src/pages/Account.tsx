@@ -13,7 +13,7 @@ export default function Account() {
   const { t, lang } = useI18n();
   const { customer, ready, login, register, logout } = useShop();
   const nav = useNavigate();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register'>(new URLSearchParams(location.search).get('mode') === 'register' ? 'register' : 'login');
   const [f, setF] = useState({ name: '', phone: '', password: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
