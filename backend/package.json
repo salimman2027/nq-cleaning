@@ -12,7 +12,8 @@
     "test": "tsx --test \"src/**/*.test.ts\"",
     "bootstrap:platform": "tsx src/scripts/bootstrap-platform.ts",
     "seed:demo": "tsx src/scripts/seed-demo.ts",
-    "reset:admin": "tsx src/scripts/reset-admin-password.ts"
+    "reset:admin": "tsx src/scripts/reset-admin-password.ts",
+    "seed:services": "tsx src/scripts/seed-services.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
