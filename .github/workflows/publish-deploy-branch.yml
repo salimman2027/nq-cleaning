@@ -1,0 +1,40 @@
+name: Build site into the "deploy" branch (for MonsterASP Git deploy)
+
+# MonsterASP can pull a branch from GitHub ("Git deploy" in the control panel) but has no npm for this monorepo.
+# This workflow builds the finished site (compiled backend + web app + production node_modules + server.js)
+# and force-pushes it to the branch "deploy". On MonsterASP choose type "Static" and branch "deploy".
+# web.config is created on the server (it holds your passwords): protect it in MonsterASP so pulls never overwrite it.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install
+      - run: npm run build
+      - name: Assemble site folder
+        run: |
+          mkdir -p stage/dist stage/frontend
+          cp -r backend/dist/. stage/dist/
+          cp -r frontend/dist/. stage/frontend/
+          cp deploy/monsterasp/server.js stage/
+          cp deploy/monsterasp/web.config stage/web.config.template
+          node -e "const p=require('./backend/package.json');require('fs').writeFileSync('stage/package.json',JSON.stringify({name:'nq-cleaning',version:p.version,private:true,main:'server.js',dependencies:p.dependencies},null,2))"
+          (cd stage && npm install --omit=dev --no-audit --no-fund)
+          node -e "require('./stage/node_modules/express');require('./stage/node_modules/mssql');require('./stage/node_modules/bcryptjs');console.log('runtime deps resolve')"
+      - name: Push to the deploy branch
+        run: |
+          cd stage
+          git init -q -b deploy
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A -f
+          git commit -qm "Build ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" deploy
