@@ -10,6 +10,7 @@ export default function Login() {
   const { t, toggle } = useI18n();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [forgot, setForgot] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const { adopt } = useAuth();
@@ -38,7 +39,7 @@ export default function Login() {
       }
       await login(email.trim(), password);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Error');
+      setError(err instanceof ApiError ? (err.code === 'BAD_CREDENTIALS' ? t('badCreds') : err.message) : 'Error');
     } finally {
       setBusy(false);
     }
@@ -67,6 +68,8 @@ export default function Login() {
           </>
         )}
         {error && <ErrorBox message={error} />}
+        {mode === 'email' && <button type="button" onClick={() => setForgot(!forgot)} className="text-sm text-cyan-700 dark:text-cyan-400">{t('forgotPass')}</button>}
+        {forgot && <p className="rise rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">{t('forgotHelp')}</p>}
         <Button type="submit" disabled={busy} className="w-full">{busy ? t('loading') : mode === 'phone' ? (sent ? t('verify') : t('sendCode')) : t('login')}</Button>
         {phoneLogin && <button type="button" onClick={() => { setMode(mode === 'email' ? 'phone' : 'email'); setSent(false); setError(''); }} className="w-full text-sm text-cyan-700 dark:text-cyan-400">{mode === 'email' ? t('signInPhone') : t('signInEmail')}</button>}
         <button type="button" onClick={toggle} className="w-full text-sm text-slate-500">{t('lang')}</button>
