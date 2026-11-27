@@ -93,10 +93,12 @@ export default function Home() {
           {(sectors ?? []).map((s) => {
             const on = sector === s.Code;
             return (
-              <button key={s.Code} onClick={() => setSector(on ? '' : s.Code)} aria-pressed={on}
-                onPointerMove={glowMove} className={`tile glow flex items-center gap-3 rounded-2xl p-4 text-start shadow-md ${on ? 'bg-[var(--color-accent)] text-cyan-950' : 'bg-white hover:bg-cyan-50 dark:bg-slate-900 dark:hover:bg-slate-800'}`}>
-                <span className={`tile-ico flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${on ? 'bg-white/40' : 'bg-cyan-100 text-cyan-800 dark:bg-slate-800 dark:text-cyan-300'}`}><SectorIcon code={s.Code} /></span>
-                <span className="min-w-0"><span className="block truncate font-semibold">{name(s)}</span><span className={`block text-xs ${on ? 'text-cyan-950/70' : 'text-slate-500'}`}>{s.Companies}</span></span>
+              <button key={s.Code} onClick={() => setSector(on ? '' : s.Code)} aria-pressed={on} onPointerMove={glowMove}
+                className={`card-lift glow relative flex h-32 flex-col justify-end overflow-hidden rounded-2xl p-3 text-start text-white shadow-md sm:h-36 ${on ? 'ring-4 ring-[var(--color-accent)]' : ''}`}
+                style={{ background: `linear-gradient(to top, rgba(6,23,58,.92) 0%, rgba(6,23,58,.55) 45%, rgba(6,23,58,0) 80%), url("/sectors/${s.Code}.webp") center/cover, #0a2552` }}>
+                <span className={`absolute end-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-lg ${on ? 'bg-[var(--color-accent)] text-cyan-950' : 'bg-white/90 text-cyan-900'}`}><SectorIcon code={s.Code} className="h-5 w-5" /></span>
+                <span className="block truncate font-bold [text-shadow:0_1px_6px_rgba(0,0,0,.7)]">{name(s)}</span>
+                <span className="block text-xs text-white/90 [text-shadow:0_1px_4px_rgba(0,0,0,.7)]">{s.Companies}</span>
               </button>
             );
           })}
