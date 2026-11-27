@@ -102,7 +102,7 @@ financeRouter.get('/reports/overview', requirePerm('finance.view_cost'), h(async
   const exp = (await query<{ T: number }>(`SELECT ISNULL(SUM(Amount),0) AS T FROM Expenses WHERE CompanyId=@c AND IsDeleted=0 AND ExpenseDate>=@f AND ExpenseDate<=@t`, p))[0];
   const rate = (await query<{ Avg: number | null; N: number }>(
     `SELECT AVG(CAST(r.Stars AS FLOAT)) AS Avg, COUNT(*) AS N FROM Ratings r WHERE r.CompanyId=@c AND r.Stars IS NOT NULL AND ${LOCAL('r.SubmittedAt')} >= @f AND ${LOCAL('r.SubmittedAt')} <= @t`, p))[0];
-  const comp = (await query<{ Open: number }>(`SELECT COUNT(*) AS Open FROM Complaints WHERE CompanyId=@c AND Status<>'resolved'`, { c: p.c }))[0];
+  const comp = (await query<{ OpenN: number }>(`SELECT COUNT(*) AS OpenN FROM Complaints WHERE CompanyId=@c AND Status<>'resolved'`, { c: p.c }))[0];
   const byService = await query<Record<string, any>>(
     `SELECT s.Name, COUNT(DISTINCT b.Id) AS Orders, ISNULL(SUM(d.LineTotal),0) AS Revenue FROM BookingDetails d JOIN Bookings b ON b.Id=d.BookingId JOIN Services s ON s.Id=d.ServiceId
       WHERE b.CompanyId=@c AND b.IsDeleted=0 AND b.Status IN ${DONE} AND ${LOCAL('b.StartAt')} >= @f AND ${LOCAL('b.StartAt')} <= @t GROUP BY s.Name ORDER BY SUM(d.LineTotal) DESC`, p);
@@ -119,7 +119,7 @@ financeRouter.get('/reports/overview', requirePerm('finance.view_cost'), h(async
     bookings: { total: bookings, done, cancelled, cancelPct: bookings ? r2((cancelled / bookings) * 100) : null },
     money: { net: r2(net), gross: r2(bk.Gross), collected: r2(bk.Collected), outstanding: r2(Number(bk.Gross) - Number(bk.Collected)), laborCost, expenses, profit: r2(net - laborCost - expenses) },
     rating: { average: rate.Avg == null ? null : r2(rate.Avg), count: Number(rate.N) },
-    openComplaints: Number(comp.Open),
+    openComplaints: Number(comp.OpenN),
     byService: byService.map((s) => ({ name: s.Name, orders: Number(s.Orders), revenue: r2(s.Revenue) })),
     bySupervisor: bySup.map((s) => ({ id: s.Id, name: s.FullName, orders: Number(s.Orders), revenue: r2(s.Revenue), avgRating: s.AvgRating == null ? null : r2(s.AvgRating) })),
     notes: ['dates use Riyadh time', 'revenue counts finished bookings only', 'technician cost = scheduled hours x hourly cost', 'on-time rate is not tracked yet'],
