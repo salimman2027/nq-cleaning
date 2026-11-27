@@ -41,7 +41,6 @@ const NAV: { to: string; key: Key; perm: string; icon: string }[] = [
   { to: '/app/customers', key: 'customers', perm: 'customers.view', icon: '👥' },
   { to: '/app/technicians', key: 'technicians', perm: 'technicians.view', icon: '🧹' },
   { to: '/app/supervisors', key: 'supervisors', perm: 'technicians.view', icon: '🧑‍💼' },
-  { to: '/app/staff-report', key: 'staffReport', perm: 'finance.view_cost', icon: '📈' },
   { to: '/app/reports', key: 'reportsTitle', perm: 'finance.view_cost', icon: '📑' },
   { to: '/app/ratings', key: 'ratingsTitle', perm: 'bookings.view', icon: '⭐' },
   { to: '/app/finance', key: 'finance', perm: 'finance.view_cost', icon: '💰' },
@@ -68,7 +67,7 @@ function Layout() {
 
   return (
     <div className="flex h-full bg-[#f4f6fa] text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <aside className={`${open ? 'w-60' : 'w-16'} lattice hidden shrink-0 flex-col bg-cyan-900 text-white transition-all md:flex`}>
+      <aside className={`${open ? 'w-60' : 'w-16'} lattice hidden shrink-0 flex-col bg-cyan-900 text-white transition-all md:flex print:!hidden`}>
         <button onClick={() => setOpen(!open)} className="flex items-center gap-2.5 p-4 text-start text-lg font-bold"><LogoMark className="h-9 w-9" />{open && <span>{t('app')}</span>}</button>
         <nav className="flex-1 space-y-1 px-2">
           {links.map((n) => (
@@ -79,7 +78,7 @@ function Layout() {
         </nav>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"><span className="text-sm font-medium">{me.FullName} <span className="text-slate-400">·</span> <span className="text-slate-500">{me.CompanyName}</span></span>
+        <header className="flex items-center justify-between gap-2 print:hidden border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"><span className="text-sm font-medium">{me.FullName} <span className="text-slate-400">·</span> <span className="text-slate-500">{me.CompanyName}</span></span>
                     <div className="flex items-center gap-2 text-sm">
             <ZoomControl />
             <button onClick={toggleDark} className="rounded-lg border px-3 py-1 dark:border-slate-700">{t('dark')}</button>
@@ -88,7 +87,7 @@ function Layout() {
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 pb-24 md:pb-4" key={lang}><Outlet /></main>
-        <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-slate-200 bg-white py-2 md:hidden dark:border-slate-800 dark:bg-slate-900">
+        <nav className="fixed inset-x-0 bottom-0 z-30 print:hidden flex justify-around border-t border-slate-200 bg-white py-2 md:hidden dark:border-slate-800 dark:bg-slate-900">
           {links.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.to === '/app'} className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-500'}`}>
               <span className="text-lg">{n.icon}</span>{t(n.key)}

@@ -111,6 +111,14 @@ financeRouter.get('/reports/overview', requirePerm('finance.view_cost'), h(async
             (SELECT AVG(CAST(r.Stars AS FLOAT)) FROM Ratings r JOIN Bookings bb ON bb.Id=r.BookingId WHERE bb.SupervisorId=s.Id AND r.Stars IS NOT NULL AND ${LOCAL('bb.StartAt')} >= @f AND ${LOCAL('bb.StartAt')} <= @t) AS AvgRating
        FROM Supervisors s LEFT JOIN Bookings b ON b.SupervisorId=s.Id AND b.CompanyId=@c AND b.IsDeleted=0 AND b.Status IN ${DONE} AND ${LOCAL('b.StartAt')} >= @f AND ${LOCAL('b.StartAt')} <= @t
       WHERE s.CompanyId=@c AND s.IsDeleted=0 GROUP BY s.Id, s.FullName ORDER BY COUNT(b.Id) DESC, s.FullName`, p);
+  const dReq = await query<{ D: string; N: number }>(`SELECT CONVERT(VARCHAR(10), ${LOCAL('CreatedAt')}, 23) AS D, COUNT(*) AS N FROM BookingRequests WHERE CompanyId=@c AND ${LOCAL('CreatedAt')} >= @f AND ${LOCAL('CreatedAt')} <= @t GROUP BY ${LOCAL('CreatedAt')}`, p);
+  const dRev = await query<{ D: string; N: number; R: number }>(`SELECT CONVERT(VARCHAR(10), ${LOCAL('StartAt')}, 23) AS D, COUNT(*) AS N, ISNULL(SUM(Total - Vat),0) AS R FROM Bookings WHERE CompanyId=@c AND IsDeleted=0 AND Status IN ${DONE} AND ${LOCAL('StartAt')} >= @f AND ${LOCAL('StartAt')} <= @t GROUP BY ${LOCAL('StartAt')}`, p);
+  const reqMap = new Map(dReq.map((r) => [r.D, Number(r.N)])), revMap = new Map(dRev.map((r) => [r.D, r]));
+  const daily: { date: string; requests: number; bookings: number; revenue: number }[] = [];
+  for (let t = Date.parse(`${q.from}T00:00:00Z`), end = Date.parse(`${q.to}T00:00:00Z`); t <= end && daily.length < 400; t += 86_400_000) {
+    const date = new Date(t).toISOString().slice(0, 10), rv = revMap.get(date);
+    daily.push({ date, requests: reqMap.get(date) ?? 0, bookings: rv ? Number(rv.N) : 0, revenue: rv ? r2(rv.R) : 0 });
+  }
   const requests = Number(reqs.Total), confirmed = Number(reqs.Confirmed), bookings = Number(bk.Total), done = Number(bk.Done), cancelled = Number(bk.Cancelled);
   const net = Number(bk.Net), laborCost = r2(labor.Cost), expenses = r2(exp.T);
   res.json({
@@ -120,6 +128,7 @@ financeRouter.get('/reports/overview', requirePerm('finance.view_cost'), h(async
     money: { net: r2(net), gross: r2(bk.Gross), collected: r2(bk.Collected), outstanding: r2(Number(bk.Gross) - Number(bk.Collected)), laborCost, expenses, profit: r2(net - laborCost - expenses) },
     rating: { average: rate.Avg == null ? null : r2(rate.Avg), count: Number(rate.N) },
     openComplaints: Number(comp.OpenN),
+    daily: daily.slice(-92),
     byService: byService.map((s) => ({ name: s.Name, orders: Number(s.Orders), revenue: r2(s.Revenue) })),
     bySupervisor: bySup.map((s) => ({ id: s.Id, name: s.FullName, orders: Number(s.Orders), revenue: r2(s.Revenue), avgRating: s.AvgRating == null ? null : r2(s.AvgRating) })),
     notes: ['dates use Riyadh time', 'revenue counts finished bookings only', 'technician cost = scheduled hours x hourly cost', 'on-time rate is not tracked yet'],

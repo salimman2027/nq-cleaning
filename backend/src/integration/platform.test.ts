@@ -272,6 +272,8 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     for (const k of ['requests', 'bookings', 'money', 'rating', 'byService', 'bySupervisor']) assert.ok(k in r.body, k);
     assert.equal(typeof r.body.money.profit, 'number');
     assert.ok(Array.isArray(r.body.bySupervisor));
+    assert.ok(Array.isArray(r.body.daily) && r.body.daily.length > 0);
+    assert.ok(r.body.daily.every((x: { date: string; requests: number }) => /^\d{4}-\d{2}-\d{2}$/.test(x.date) && typeof x.requests === 'number'));
     assert.equal((await request(app).get('/api/finance/reports/overview?from=bad').set(auth(ownerToken))).status, 400);
     assert.equal((await request(app).get('/api/finance/reports/overview')).status, 401);
   });
