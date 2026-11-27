@@ -7,7 +7,7 @@ import { SectorIcon } from '../sectorIcons';
 import { ErrorBox, Skeleton } from '../ui';
 
 interface Sector { Code: string; NameAr: string; NameEn: string; Companies: number }
-interface Co { ReviewedAt?: string | null; Slug: string; Name: string; Description: string | null; LogoUrl: string | null; PrimaryColor: string | null; Sectors: string[] }
+interface Co { CoverUrl?: string | null; ReviewedAt?: string | null; Slug: string; Name: string; Description: string | null; LogoUrl: string | null; PrimaryColor: string | null; Sectors: string[] }
 
 export function PublicShell({ children, flush = false }: { children: ReactNode; flush?: boolean }) {
   const { t, toggle } = useI18n();
@@ -119,7 +119,7 @@ export default function Home() {
               const color = c.PrimaryColor ?? '#0f3f8f';
               return (
                 <Link key={c.Slug} to={`/c/${c.Slug}`} onPointerMove={glowMove} className="card-lift glow group overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
-                  <div className="lattice h-20" style={{ background: color }} />
+                  <div className="lattice h-24 bg-cover bg-center" style={{ background: c.CoverUrl ? `linear-gradient(transparent 40%, ${color}cc), url("${c.CoverUrl}") center/cover` : color }} />
                   <div className="-mt-8 px-4 pb-4">
                     <div className="logo-pop flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white text-2xl font-bold shadow ring-4 ring-white dark:bg-slate-800 dark:ring-slate-900" style={{ color }}>
                       {c.LogoUrl ? <img src={c.LogoUrl} alt="" className="h-full w-full object-cover" /> : c.Name.slice(0, 1)}

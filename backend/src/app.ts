@@ -14,6 +14,7 @@ import { customersRouter } from './routes/customers';
 import { servicesRouter } from './routes/services';
 import { techniciansRouter } from './routes/technicians';
 import { bookingsRouter } from './routes/bookings';
+import { requestsRouter } from './routes/requests';
 import { dashboardRouter } from './routes/dashboard';
 import { usersRouter } from './routes/users';
 import { branchesRouter } from './routes/branches';
@@ -57,6 +58,7 @@ export function createApp(): express.Express {
   api.use('/services', authenticate, requireApprovedCompany, servicesRouter);
   api.use('/technicians', authenticate, requireApprovedCompany, techniciansRouter);
   api.use('/bookings', authenticate, requireApprovedCompany, bookingsRouter);
+  api.use('/requests', authenticate, requireApprovedCompany, requestsRouter);
   api.use('/dashboard', authenticate, requireApprovedCompany, dashboardRouter);
   api.use('/users', authenticate, requireApprovedCompany, usersRouter);
   api.use('/branches', authenticate, requireApprovedCompany, branchesRouter);

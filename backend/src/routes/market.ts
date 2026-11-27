@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { config } from '../config';
 import { query } from '../db';
 import { HttpError, h, parse } from '../errors';
+import rateLimit from 'express-rate-limit';
+import { isSaudiMobile } from '../lib/otp';
 
 /** Public, read-only marketplace endpoints. Only approved companies are ever visible. */
 export const marketRouter = Router();
@@ -21,7 +23,7 @@ marketRouter.get('/companies', h(async (req, res) => {
   const q = parse(z.object({ sector: z.string().max(40).optional(), q: z.string().max(100).optional() }), req.query);
   const search = q.q ? q.q.replace(/[\\%_\[]/g, '') : '';
   const items = await query(
-    `SELECT c.Slug, c.Name, c.Description, c.LogoUrl, c.PrimaryColor, c.ReviewedAt,
+    `SELECT c.Slug, c.Name, c.Description, c.LogoUrl, c.CoverUrl, c.PrimaryColor, c.ReviewedAt,
             (SELECT STRING_AGG(s.Code, ',') FROM CompanySectors cs JOIN Sectors s ON s.Id=cs.SectorId WHERE cs.CompanyId=c.Id) AS Sectors
        FROM Companies c
       WHERE c.Status='approved' AND c.IsDeleted=0 AND c.IsPlatform=0 AND c.Slug IS NOT NULL
@@ -36,7 +38,7 @@ marketRouter.get('/companies', h(async (req, res) => {
 marketRouter.get('/companies/:slug', h(async (req, res) => {
   const slug = parse(z.string().regex(/^[a-z0-9-]{3,60}$/), req.params.slug);
   const c = (await query<Record<string, any>>(
-    `SELECT Id, Slug, Name, Description, LogoUrl, PrimaryColor FROM Companies WHERE Slug=@s AND Status='approved' AND IsDeleted=0 AND IsPlatform=0`,
+    `SELECT Id, Slug, Name, Description, LogoUrl, CoverUrl, PrimaryColor FROM Companies WHERE Slug=@s AND Status='approved' AND IsDeleted=0 AND IsPlatform=0`,
     { s: slug },
   ))[0];
   if (!c) throw new HttpError(404, 'NOT_FOUND', 'Company not found');
@@ -51,7 +53,37 @@ marketRouter.get('/companies/:slug', h(async (req, res) => {
     { c: c.Id },
   );
   const sectors = await query(`SELECT s.Code, s.NameAr, s.NameEn FROM CompanySectors cs JOIN Sectors s ON s.Id=cs.SectorId WHERE cs.CompanyId=@c`, { c: c.Id });
-  res.json({ slug: c.Slug, name: c.Name, description: c.Description, logoUrl: c.LogoUrl, primaryColor: c.PrimaryColor, sectors, services });
+  res.json({ slug: c.Slug, name: c.Name, description: c.Description, logoUrl: c.LogoUrl, coverUrl: c.CoverUrl, primaryColor: c.PrimaryColor, sectors, services });
+}));
+
+const requestLimiter = rateLimit({ windowMs: 10 * 60_000, limit: 8, standardHeaders: true, legacyHeaders: false, skip: () => config.env === 'test' });
+const riyadhToday = (): string => new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
+
+/** A visitor asks a company for a service. Nothing is reserved or charged; the company calls to confirm. */
+marketRouter.post('/companies/:slug/requests', requestLimiter, h(async (req, res) => {
+  const slug = parse(z.string().regex(/^[a-z0-9-]{3,60}$/), req.params.slug);
+  const b = parse(z.object({
+    serviceId: z.number().int().positive(),
+    customerName: z.string().trim().min(2).max(120),
+    phone: z.string().trim().refine(isSaudiMobile, 'Saudi mobile (05XXXXXXXX)'),
+    address: z.string().trim().max(300).optional(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    period: z.enum(['morning', 'afternoon', 'evening']),
+    notes: z.string().trim().max(500).optional(),
+  }), req.body);
+  const today = riyadhToday();
+  const max = new Date(Date.parse(today) + 90 * 86400_000).toISOString().slice(0, 10);
+  if (b.date < today || b.date > max || Number.isNaN(Date.parse(b.date))) throw new HttpError(400, 'BAD_DATE', 'Choose a date within the next 90 days');
+  const c = (await query<{ Id: number }>(`SELECT Id FROM Companies WHERE Slug=@s AND Status='approved' AND IsDeleted=0 AND IsPlatform=0`, { s: slug }))[0];
+  if (!c) throw new HttpError(404, 'NOT_FOUND', 'Company not found');
+  const svc = await query(`SELECT 1 AS x FROM Services WHERE Id=@i AND CompanyId=@c AND IsActive=1 AND IsDeleted=0`, { i: b.serviceId, c: c.Id });
+  if (!svc.length) throw new HttpError(400, 'BAD_SERVICE', 'Unknown service');
+  const r = await query<{ Id: number }>(
+    `INSERT INTO BookingRequests (CompanyId, ServiceId, CustomerName, Phone, Address, PreferredDate, PreferredPeriod, Notes)
+     OUTPUT inserted.Id VALUES (@c,@s,@n,@p,@a,@d,@pe,@no)`,
+    { c: c.Id, s: b.serviceId, n: b.customerName, p: b.phone, a: b.address ?? null, d: b.date, pe: b.period, no: b.notes ?? null },
+  );
+  res.status(201).json({ id: r[0].Id, status: 'new' });
 }));
 
 marketRouter.get('/brand', h(async (_req, res) => {

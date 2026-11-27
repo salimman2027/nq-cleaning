@@ -32,7 +32,7 @@ export async function listDocuments(companyId: number, entered: { crNumber?: str
 
 async function loadProfile(companyId: number) {
   const c = (await query<Record<string, any>>(
-    `SELECT Id, Name, Slug, Phone, Status, Description, LogoUrl, PrimaryColor, CrNumber, VatNumber, NationalAddress, SubmittedAt, ReviewedAt, ReviewNote
+    `SELECT Id, Name, Slug, Phone, Status, Description, LogoUrl, CoverUrl, PrimaryColor, CrNumber, VatNumber, NationalAddress, SubmittedAt, ReviewedAt, ReviewNote
        FROM Companies WHERE Id=@c AND IsDeleted=0`,
     { c: companyId },
   ))[0];
@@ -43,7 +43,7 @@ async function loadProfile(companyId: number) {
   const missingDocs = DOC_KINDS.filter((k) => !documents.some((d) => d.kind === k));
   return {
     documents, extractionEnabled: extractionEnabled(),
-    id: c.Id, name: c.Name, slug: c.Slug, phone: c.Phone, status: c.Status, description: c.Description, logoUrl: c.LogoUrl,
+    id: c.Id, name: c.Name, slug: c.Slug, phone: c.Phone, status: c.Status, description: c.Description, logoUrl: c.LogoUrl, coverUrl: c.CoverUrl,
     primaryColor: c.PrimaryColor, crNumber: c.CrNumber, vatNumber: c.VatNumber, nationalAddress: address,
     submittedAt: c.SubmittedAt, reviewedAt: c.ReviewedAt, reviewNote: c.Status === 'rejected' ? c.ReviewNote : null,
     sectorCodes: sectors.map((s) => s.Code),
@@ -58,6 +58,7 @@ const updateSchema = z.object({
   slug: z.string().regex(SLUG_RE).optional(),
   description: z.string().max(1000).nullable().optional(),
   logoUrl: z.string().url().max(500).refine((u) => u.startsWith('https://'), 'https only').nullable().optional(),
+  coverUrl: z.string().url().max(500).refine((u) => u.startsWith('https://'), 'https only').nullable().optional(),
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
   crNumber: z.string().regex(CR_RE).optional(),
   vatNumber: z.string().regex(VAT_RE).optional(),
@@ -95,6 +96,7 @@ companyRouter.put(
            Name = COALESCE(@name, Name), Slug = COALESCE(@slug, Slug),
            Description = CASE WHEN @hasDesc = 1 THEN @desc ELSE Description END,
            LogoUrl = CASE WHEN @hasLogo = 1 THEN @logo ELSE LogoUrl END,
+           CoverUrl = CASE WHEN @hasCover = 1 THEN @cover ELSE CoverUrl END,
            PrimaryColor = CASE WHEN @hasColor = 1 THEN @color ELSE PrimaryColor END,
            CrNumber = COALESCE(@cr, CrNumber), VatNumber = COALESCE(@vat, VatNumber),
            NationalAddress = COALESCE(@addr, NationalAddress)
@@ -103,6 +105,7 @@ companyRouter.put(
           c: cid, name: b.name ?? null, slug: b.slug ?? null,
           hasDesc: b.description !== undefined ? 1 : 0, desc: b.description ?? null,
           hasLogo: b.logoUrl !== undefined ? 1 : 0, logo: b.logoUrl ?? null,
+          hasCover: b.coverUrl !== undefined ? 1 : 0, cover: b.coverUrl ?? null,
           hasColor: b.primaryColor !== undefined ? 1 : 0, color: b.primaryColor ?? null,
           cr: b.crNumber ?? null, vat: b.vatNumber ?? null, addr: b.nationalAddress ? JSON.stringify(b.nationalAddress) : null,
         },

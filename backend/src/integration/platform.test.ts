@@ -131,6 +131,26 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).get('/api/customers').set(auth(platToken))).status, 403);
   });
 
+  test('visitor booking request reaches only the right company; validation and cover URL', async () => {
+    const { query } = await import('../db');
+    const svc = (await query<{ Id: number }>(`INSERT INTO Services (CompanyId, Name, PricingMethod, DefaultMinutes) OUTPUT INSERTED.Id VALUES (@c, N'Deep clean', 'fixed', 120)`, { c: companyId }))[0].Id;
+    const day = new Date(Date.now() + 3 * 86400_000 + 3 * 3600_000).toISOString().slice(0, 10);
+    const ok = { serviceId: svc, customerName: 'Ahmed', phone: '0551112233', date: day, period: 'morning' };
+    assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send(ok)).status, 201);
+    assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, phone: '12345' })).status, 400);
+    assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, date: '2020-01-01' })).status, 400);
+    assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, serviceId: svc + 9999 })).status, 400);
+    assert.equal((await request(app).post('/api/market/companies/nope-co/requests').send(ok)).status, 404);
+    const list = await request(app).get('/api/requests').set(auth(ownerToken));
+    assert.equal(list.status, 200);
+    assert.equal(list.body.items.length, 1);
+    assert.equal((await request(app).get('/api/requests').set(auth(platToken))).status, 403);
+    assert.equal((await request(app).patch(`/api/requests/${list.body.items[0].Id}`).set(auth(ownerToken)).send({ status: 'contacted' })).status, 200);
+    const cover = await request(app).put('/api/company').set(auth(ownerToken)).send({ coverUrl: 'https://example.test/c.jpg' });
+    assert.equal(cover.body.coverUrl, 'https://example.test/c.jpg');
+    assert.equal((await request(app).put('/api/company').set(auth(ownerToken)).send({ coverUrl: 'http://example.test/c.jpg' })).status, 400);
+  });
+
   test('suspension blocks tenant APIs immediately and hides the storefront', async () => {
     assert.equal((await request(app).post(`/api/platform/companies/${companyId}/suspend`).set(auth(platToken)).send({ reason: 'Policy violation' })).status, 200);
     assert.equal((await request(app).get('/api/customers').set(auth(ownerToken))).status, 403);

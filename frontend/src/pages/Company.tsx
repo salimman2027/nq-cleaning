@@ -7,7 +7,7 @@ import { Button, ErrorBox, Field, Input, Skeleton } from '../ui';
 
 interface Addr { buildingNo: string; street: string; district: string; city: string; postalCode: string; additionalNo: string }
 interface Profile {
-  name: string; slug: string; logoUrl: string | null; primaryColor: string | null; status: string; description: string | null; crNumber: string | null; vatNumber: string | null;
+  name: string; slug: string; logoUrl: string | null; coverUrl: string | null; primaryColor: string | null; status: string; description: string | null; crNumber: string | null; vatNumber: string | null;
   nationalAddress: Addr | null; documents: Doc[]; extractionEnabled: boolean; reviewNote: string | null; sectorCodes: string[]; missing: string[];
 }
 interface Doc { kind: 'cr' | 'vat' | 'address'; fileName: string; mimeType: string; extracted: { crNumber?: string; vatNumber?: string; nationalAddress?: Addr } | null; mismatch: string[] }
@@ -18,14 +18,14 @@ export default function Company() {
   const { t } = useI18n();
   const { reload } = useAuth();
   const [p, setP] = useState<Profile | null>(null);
-  const [form, setForm] = useState({ name: '', slug: '', description: '', logoUrl: '', primaryColor: '', crNumber: '', vatNumber: '', addr: EMPTY });
+  const [form, setForm] = useState({ name: '', slug: '', description: '', logoUrl: '', coverUrl: '', primaryColor: '', crNumber: '', vatNumber: '', addr: EMPTY });
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
 
   const apply = useCallback((r: Profile) => {
     setP(r);
-    setForm({ name: r.name, slug: r.slug ?? '', description: r.description ?? '', logoUrl: r.logoUrl ?? '', primaryColor: r.primaryColor ?? '', crNumber: r.crNumber ?? '', vatNumber: r.vatNumber ?? '', addr: r.nationalAddress ?? EMPTY });
+    setForm({ name: r.name, slug: r.slug ?? '', description: r.description ?? '', logoUrl: r.logoUrl ?? '', coverUrl: r.coverUrl ?? '', primaryColor: r.primaryColor ?? '', crNumber: r.crNumber ?? '', vatNumber: r.vatNumber ?? '', addr: r.nationalAddress ?? EMPTY });
   }, []);
   useEffect(() => { api<Profile>('/company').then(apply).catch(() => setError('Error')); }, [apply]);
 
@@ -39,7 +39,7 @@ export default function Company() {
     try { apply(await fn()); await reload(); setMsg(t('saved')); } catch (e) { setError(e instanceof ApiError ? `${e.message}${Array.isArray((e.details as { missing?: string[] })?.missing) ? ': ' + (e.details as { missing: string[] }).missing.join(', ') : ''}` : 'Error'); } finally { setBusy(false); }
   };
   const save = () => act(() => api<Profile>('/company', { method: 'PUT', body: {
-    name: form.name, slug: form.slug, description: form.description || null, logoUrl: form.logoUrl.trim() || null, primaryColor: form.primaryColor || null,
+    name: form.name, slug: form.slug, description: form.description || null, logoUrl: form.logoUrl.trim() || null, coverUrl: form.coverUrl.trim() || null, primaryColor: form.primaryColor || null,
     ...(locked ? {} : { ...(form.crNumber ? { crNumber: form.crNumber } : {}), ...(form.vatNumber ? { vatNumber: form.vatNumber } : {}), ...(addrComplete ? { nationalAddress: form.addr } : {}) }),
   } }));
   const submit = () => act(async () => { await api('/company/submit', { method: 'POST' }); return api<Profile>('/company'); });
@@ -101,6 +101,7 @@ export default function Company() {
         <Field label={t('slugLabel')}><Input dir="ltr" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase() })} /></Field>
         <Field label={t('description')}><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
         <Field label={t('logoUrl')}><Input dir="ltr" placeholder="https://…" value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} /></Field>
+        <Field label={t('coverUrl')}><Input dir="ltr" placeholder="https://…" value={form.coverUrl} onChange={(e) => setForm({ ...form, coverUrl: e.target.value })} /></Field>
         <Field label={t('brandColor')}><Input type="color" value={form.primaryColor || '#0f3f8f'} onChange={(e) => setForm({ ...form, primaryColor: e.target.value })} /></Field>
         <Field label={t('cr')}><Input dir="ltr" inputMode="numeric" disabled={locked} value={form.crNumber} onChange={(e) => setForm({ ...form, crNumber: e.target.value })} /></Field>
         <Field label={t('vat')}><Input dir="ltr" inputMode="numeric" disabled={locked} value={form.vatNumber} onChange={(e) => setForm({ ...form, vatNumber: e.target.value })} /></Field>
