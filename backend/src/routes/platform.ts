@@ -5,6 +5,8 @@ import { query } from '../db';
 import { HttpError, h, parse } from '../errors';
 import { invalidateCompanyStatus, requirePerm } from '../auth/middleware';
 import { send } from '../services/notify';
+import { listDocuments, sendFile } from './company';
+import { DOC_KINDS } from '../lib/documents';
 
 export const platformRouter = Router();
 
@@ -45,7 +47,23 @@ platformRouter.get(
     const c = await getCompany(id);
     const owner = (await query(`SELECT TOP 1 u.FullName, u.Email, u.Phone FROM Users u JOIN UserRoles ur ON ur.UserId=u.Id JOIN Roles r ON r.Id=ur.RoleId WHERE u.CompanyId=@c AND r.Name='Company Owner' ORDER BY u.Id`, { c: id }))[0] ?? null;
     const sectors = await query(`SELECT s.Code, s.NameAr, s.NameEn FROM CompanySectors cs JOIN Sectors s ON s.Id=cs.SectorId WHERE cs.CompanyId=@c`, { c: id });
-    res.json({ ...c, NationalAddress: c.NationalAddress ? JSON.parse(c.NationalAddress) : null, owner, sectors });
+    const address = c.NationalAddress ? JSON.parse(c.NationalAddress) : null;
+    const documents = await listDocuments(id, { crNumber: c.CrNumber, vatNumber: c.VatNumber, nationalAddress: address });
+    res.json({ ...c, NationalAddress: address, owner, sectors, documents });
+  }),
+);
+
+platformRouter.get(
+  '/companies/:id/documents/:kind/file',
+  requirePerm('platform.companies.view'),
+  h(async (req, res) => {
+    const id = parse(z.coerce.number().int().positive(), req.params.id);
+    const kind = parse(z.enum(DOC_KINDS), req.params.kind);
+    await getCompany(id);
+    const d = (await query<Record<string, any>>(`SELECT TOP 1 FileName, MimeType, Data FROM CompanyDocuments WHERE CompanyId=@c AND Kind=@k AND IsCurrent=1`, { c: id, k: kind }))[0];
+    if (!d) throw new HttpError(404, 'NOT_FOUND', 'Document not found');
+    await query(`INSERT INTO AuditLogs (CompanyId, UserId, Action, Entity, EntityId) VALUES (@c,@u,'company.document.view','Company',@e)`, { c: req.user!.companyId, u: req.user!.id, e: `${id}:${kind}` });
+    sendFile(res, d);
   }),
 );
 

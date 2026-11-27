@@ -56,3 +56,9 @@
 
 ## APK
 - [~] Capacitor + workflow على GitHub Actions. يحتاج Backend على HTTPS ومتغير `API_URL` (راجع `docs/APK.md`).
+
+## Company documents (platform onboarding)
+- [x] Owner uploads CR, VAT certificate, national address (PDF/PNG/JPG/WEBP, 5 MB); real type checked by file signature; stored in SQL Server (migration 004). Submit requires all three.
+- [x] Platform staff open the original files from the review screen (audited); mismatch flag when file values differ from typed values.
+- [~] Auto-read of values: only when ANTHROPIC_API_KEY is set (unit-tested with a stubbed API; NOT yet verified against real Saudi documents). Without a key, files are delivered and the owner types the values.
+- [ ] Malware scanning of uploads, virus/OCR fallback without an API key.

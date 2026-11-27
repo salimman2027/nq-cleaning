@@ -1,6 +1,6 @@
 import type { ChangeEvent } from 'react';
 import { useCallback, useEffect, useState } from 'react';
-import { api, ApiError } from '../api';
+import { api, ApiError, fileToBase64, openFile } from '../api';
 import { useAuth } from '../auth';
 import { useI18n, type Key } from '../i18n';
 import { Button, ErrorBox, Field, Input, Skeleton } from '../ui';
@@ -8,8 +8,10 @@ import { Button, ErrorBox, Field, Input, Skeleton } from '../ui';
 interface Addr { buildingNo: string; street: string; district: string; city: string; postalCode: string; additionalNo: string }
 interface Profile {
   name: string; slug: string; logoUrl: string | null; primaryColor: string | null; status: string; description: string | null; crNumber: string | null; vatNumber: string | null;
-  nationalAddress: Addr | null; reviewNote: string | null; sectorCodes: string[]; missing: string[];
+  nationalAddress: Addr | null; documents: Doc[]; extractionEnabled: boolean; reviewNote: string | null; sectorCodes: string[]; missing: string[];
 }
+interface Doc { kind: 'cr' | 'vat' | 'address'; fileName: string; mimeType: string; extracted: { crNumber?: string; vatNumber?: string; nationalAddress?: Addr } | null; mismatch: string[] }
+const KINDS = ['cr', 'vat', 'address'] as const;
 const EMPTY: Addr = { buildingNo: '', street: '', district: '', city: '', postalCode: '', additionalNo: '' };
 
 export default function Company() {
@@ -41,6 +43,17 @@ export default function Company() {
     ...(locked ? {} : { ...(form.crNumber ? { crNumber: form.crNumber } : {}), ...(form.vatNumber ? { vatNumber: form.vatNumber } : {}), ...(addrComplete ? { nationalAddress: form.addr } : {}) }),
   } }));
   const submit = () => act(async () => { await api('/company/submit', { method: 'POST' }); return api<Profile>('/company'); });
+  const upload = (kind: string, f: File | undefined) => {
+    if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { setError('5 MB max'); return; }
+    return act(async () => api<Profile>(`/company/documents/${kind}`, { method: 'PUT', body: { fileName: f.name, dataBase64: await fileToBase64(f) } }));
+  };
+  const useExtracted = (d: Doc) => {
+    const x = d.extracted;
+    if (!x) return;
+    setForm((f) => ({ ...f, crNumber: x.crNumber ?? f.crNumber, vatNumber: x.vatNumber ?? f.vatNumber, addr: x.nationalAddress ?? f.addr }));
+  };
+  const docsOpen = p.status === 'draft' || p.status === 'rejected';
   const setA = (k: keyof Addr) => (e: ChangeEvent<HTMLInputElement>) => setForm({ ...form, addr: { ...form.addr, [k]: e.target.value } });
 
   return (
@@ -55,6 +68,34 @@ export default function Company() {
       {locked && <p className="text-xs text-slate-500">{t('lockedNote')}</p>}
       {error && <ErrorBox message={error} />}
       {msg && <p className="text-sm text-green-700">{msg}</p>}
+      <section className="space-y-3 rounded-2xl bg-white p-4 shadow dark:bg-slate-900">
+        <div><h2 className="font-semibold">{t('docs')}</h2><p className="text-xs text-slate-500">{t('docsHint')}</p></div>
+        {KINDS.map((k) => {
+          const d = p.documents.find((x) => x.kind === k);
+          const needsFill = d?.extracted && !(k === 'cr' ? form.crNumber : k === 'vat' ? form.vatNumber : form.addr.buildingNo);
+          return (
+            <div key={k} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0"><div className="text-sm font-medium">{t(`doc_${k}` as Key)}</div>
+                  <div className="truncate text-xs text-slate-500" dir="ltr">{d ? d.fileName : t('docMissing')}</div></div>
+                <div className="flex gap-2">
+                  {d && <Button variant="ghost" onClick={() => openFile(`/company/documents/${k}/file`).catch(() => setError('Error'))}>{t('viewFile')}</Button>}
+                  {docsOpen && <label className="cursor-pointer rounded-lg bg-cyan-700 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-800">
+                    {d ? t('replaceFile') : t('upload')}
+                    <input type="file" className="sr-only" accept="application/pdf,image/png,image/jpeg,image/webp" disabled={busy} onChange={(e) => { void upload(k, e.target.files?.[0]); e.target.value = ''; }} />
+                  </label>}
+                </div>
+              </div>
+              {d?.extracted && (needsFill || d.mismatch.length > 0) && docsOpen && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                  {d.mismatch.length > 0 && <span>{t('fileMismatch')}</span>}
+                  <button type="button" className="font-semibold underline" onClick={() => useExtracted(d)}>{t('applyExtracted')}</button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </section>
       <fieldset disabled={!editable || busy} className="space-y-3 rounded-2xl bg-white p-4 shadow dark:bg-slate-900">
         <Field label={t('companyName')}><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
         <Field label={t('slugLabel')}><Input dir="ltr" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase() })} /></Field>

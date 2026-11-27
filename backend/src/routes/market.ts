@@ -21,13 +21,13 @@ marketRouter.get('/companies', h(async (req, res) => {
   const q = parse(z.object({ sector: z.string().max(40).optional(), q: z.string().max(100).optional() }), req.query);
   const search = q.q ? q.q.replace(/[\\%_\[]/g, '') : '';
   const items = await query(
-    `SELECT c.Slug, c.Name, c.Description, c.LogoUrl, c.PrimaryColor,
+    `SELECT c.Slug, c.Name, c.Description, c.LogoUrl, c.PrimaryColor, c.ReviewedAt,
             (SELECT STRING_AGG(s.Code, ',') FROM CompanySectors cs JOIN Sectors s ON s.Id=cs.SectorId WHERE cs.CompanyId=c.Id) AS Sectors
        FROM Companies c
       WHERE c.Status='approved' AND c.IsDeleted=0 AND c.IsPlatform=0 AND c.Slug IS NOT NULL
         AND (@sector IS NULL OR EXISTS (SELECT 1 FROM CompanySectors cs JOIN Sectors s ON s.Id=cs.SectorId WHERE cs.CompanyId=c.Id AND s.Code=@sector))
         AND (@q = '' OR c.Name LIKE '%' + @q + '%')
-      ORDER BY c.Name`,
+      ORDER BY c.ReviewedAt DESC, c.Id DESC`,
     { sector: q.sector ?? null, q: search },
   );
   res.json({ items: items.map((r) => ({ ...r, Sectors: r.Sectors ? String(r.Sectors).split(',') : [] })) });

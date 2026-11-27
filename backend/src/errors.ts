@@ -47,6 +47,10 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     res.status(400).json({ error: { code: 'BAD_JSON', message: 'Malformed JSON body' } });
     return;
   }
+  if (err?.type === 'entity.too.large') {
+    res.status(413).json({ error: { code: 'FILE_TOO_LARGE', message: 'Request body is too large' } });
+    return;
+  }
   // Log without request bodies or credentials.
   console.error('[unhandled]', err?.name, msg);
   res.status(500).json({ error: { code: 'INTERNAL', message: 'Internal server error' } });

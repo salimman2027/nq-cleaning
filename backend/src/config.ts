@@ -25,6 +25,10 @@ export const config = {
       return process.env.OTP_DEV_MODE === '1' && (process.env.NODE_ENV ?? 'development') !== 'production';
     },
   },
+  extract: {
+    apiKey: process.env.ANTHROPIC_API_KEY ?? '',
+    model: process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-5',
+  },
   notify: {
     provider: process.env.NOTIFY_PROVIDER ?? 'dev', // 'dev' | 'whatsapp'
     whatsappToken: process.env.WHATSAPP_TOKEN ?? '',

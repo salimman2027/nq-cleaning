@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, ApiError } from '../api';
+import { api, ApiError, openFile } from '../api';
 import { useAuth } from '../auth';
 import { useI18n, type Key } from '../i18n';
 import { Button, ErrorBox, Modal, Select, Skeleton } from '../ui';
 
 interface Row { Id: number; Name: string; Phone: string | null; Status: string; CrNumber: string | null; SubmittedAt: string | null }
-interface Detail extends Row { VatNumber: string | null; NationalAddress: Record<string, string> | null; Description: string | null; owner: { FullName: string; Email: string; Phone: string | null } | null; sectors: { NameAr: string; NameEn: string }[] }
+interface Detail extends Row { VatNumber: string | null; NationalAddress: Record<string, string> | null; Description: string | null; owner: { FullName: string; Email: string; Phone: string | null } | null; sectors: { NameAr: string; NameEn: string }[]; documents: { kind: string; fileName: string; extractStatus: string; mismatch: string[] }[] }
 
 export default function Review() {
   const { t, lang } = useI18n();
@@ -61,6 +61,18 @@ export default function Review() {
             <dt className="text-slate-500">{t('natAddr')}</dt><dd>{open.NationalAddress ? Object.values(open.NationalAddress).join(' — ') : '—'}</dd>
             <dt className="text-slate-500">{t('sectors')}</dt><dd>{open.sectors.map((s) => (lang === 'ar' ? s.NameAr : s.NameEn)).join(' · ')}</dd>
           </dl>
+          <div className="mt-4 space-y-2">
+            <p className="text-sm font-medium">{t('docsFor')}</p>
+            {['cr', 'vat', 'address'].map((k) => {
+              const d = open.documents.find((x) => x.kind === k);
+              return (
+                <div key={k} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 p-2 text-sm dark:border-slate-700">
+                  <span>{t(`doc_${k}` as Key)}{d && d.mismatch.length > 0 && <span className="ms-2 rounded bg-amber-100 px-1.5 text-xs text-amber-800">{t('fileMismatch')}</span>}</span>
+                  {d ? <Button variant="ghost" onClick={() => openFile(`/platform/companies/${open.Id}/documents/${k}/file`).catch(() => setError('Error'))}>{t('viewFile')}</Button> : <span className="text-xs text-red-600">{t('docMissing')}</span>}
+                </div>
+              );
+            })}
+          </div>
           {canReview && (
             <div className="mt-4 space-y-3">
               {(open.Status === 'pending_review' || open.Status === 'approved') && (

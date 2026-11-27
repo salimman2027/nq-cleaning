@@ -67,3 +67,22 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
   }
   return data as T;
 }
+
+/** Fetch a protected file (needs the bearer token, so it cannot be a plain link) and open it in a new tab. */
+export async function openFile(path: string): Promise<void> {
+  const t = read();
+  const res = await fetch(`${BASE}${path}`, { headers: t ? { Authorization: `Bearer ${t.accessToken}` } : {} });
+  if (!res.ok) throw new ApiError(res.status, 'ERROR', res.statusText);
+  const url = URL.createObjectURL(await res.blob());
+  window.open(url, '_blank', 'noopener');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+export function fileToBase64(f: File): Promise<string> {
+  return new Promise((ok, bad) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result).split(',')[1] ?? '');
+    r.onerror = () => bad(new Error('read'));
+    r.readAsDataURL(f);
+  });
+}

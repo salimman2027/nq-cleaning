@@ -76,7 +76,28 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
   test('not visible in the public marketplace before approval; platform permission enforced', async () => {
     const put = await request(app).put('/api/company').set(auth(ownerToken)).send({ crNumber: '1010123456', vatNumber: '300000000000003', nationalAddress: ADDR, slug: 'clean-co' });
     assert.equal(put.status, 200);
+    // Documents are mandatory: without them the submit is refused.
+    const noDocs = await request(app).post('/api/company/submit').set(auth(ownerToken));
+    assert.equal(noDocs.status, 409);
+    assert.deepEqual(noDocs.body.error.details.missing, ['doc:cr', 'doc:vat', 'doc:address']);
+    const pdf = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF').toString('base64');
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]).toString('base64');
+    assert.equal((await request(app).put('/api/company/documents/cr').set(auth(ownerToken)).send({ fileName: 'cr.pdf', dataBase64: pdf })).status, 200);
+    assert.equal((await request(app).put('/api/company/documents/vat').set(auth(ownerToken)).send({ fileName: 'vat.png', dataBase64: png })).status, 200);
+    // A text file renamed to .pdf is refused by its content, not its name.
+    const fake = await request(app).put('/api/company/documents/address').set(auth(ownerToken)).send({ fileName: 'a.pdf', dataBase64: Buffer.from('hello world, not a pdf at all').toString('base64') });
+    assert.equal(fake.status, 415);
+    assert.equal((await request(app).put('/api/company/documents/address').set(auth(ownerToken)).send({ fileName: 'a.pdf', dataBase64: pdf })).status, 200);
+    const file = await request(app).get('/api/company/documents/vat/file').set(auth(ownerToken));
+    assert.equal(file.status, 200);
+    assert.equal(file.headers['content-type'], 'image/png');
     assert.equal((await request(app).post('/api/company/submit').set(auth(ownerToken))).status, 200);
+    // Locked once submitted; platform staff can read the files, other tenants cannot.
+    assert.equal((await request(app).put('/api/company/documents/cr').set(auth(ownerToken)).send({ fileName: 'cr2.pdf', dataBase64: pdf })).status, 409);
+    const det = await request(app).get(`/api/platform/companies/${companyId}`).set(auth(platToken));
+    assert.equal(det.body.documents.length, 3);
+    assert.equal((await request(app).get(`/api/platform/companies/${companyId}/documents/cr/file`).set(auth(platToken))).status, 200);
+    assert.equal((await request(app).get(`/api/platform/companies/${companyId}/documents/cr/file`).set(auth(ownerToken))).status, 403);
     assert.equal((await request(app).get('/api/market/companies/clean-co')).status, 404);
     assert.equal((await request(app).get('/api/platform/companies').set(auth(ownerToken))).status, 403);
     assert.equal((await request(app).post(`/api/platform/companies/${companyId}/approve`).set(auth(ownerToken))).status, 403);

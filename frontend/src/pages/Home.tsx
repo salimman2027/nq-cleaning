@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type PointerEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../auth';
@@ -7,7 +7,7 @@ import { SectorIcon } from '../sectorIcons';
 import { ErrorBox, Skeleton } from '../ui';
 
 interface Sector { Code: string; NameAr: string; NameEn: string; Companies: number }
-interface Co { Slug: string; Name: string; Description: string | null; LogoUrl: string | null; PrimaryColor: string | null; Sectors: string[] }
+interface Co { ReviewedAt?: string | null; Slug: string; Name: string; Description: string | null; LogoUrl: string | null; PrimaryColor: string | null; Sectors: string[] }
 
 export function PublicShell({ children, flush = false }: { children: ReactNode; flush?: boolean }) {
   const { t, toggle } = useI18n();
@@ -35,6 +35,12 @@ export function PublicShell({ children, flush = false }: { children: ReactNode; 
   );
 }
 
+const glowMove = (e: PointerEvent<HTMLElement>) => {
+  const r = e.currentTarget.getBoundingClientRect();
+  e.currentTarget.style.setProperty('--x', `${e.clientX - r.left}px`);
+  e.currentTarget.style.setProperty('--y', `${e.clientY - r.top}px`);
+};
+
 export default function Home() {
   const { t, lang } = useI18n();
   const [sectors, setSectors] = useState<Sector[] | null>(null);
@@ -55,8 +61,9 @@ export default function Home() {
   const name = (s: Sector) => (lang === 'ar' ? s.NameAr : s.NameEn);
   return (
     <PublicShell>
-      <section className="lattice bg-cyan-900 pb-24 pt-10 text-white sm:pt-16">
-        <div className="mx-auto max-w-6xl px-4">
+      <section className="lattice relative overflow-hidden bg-cyan-900 pb-24 pt-10 text-white sm:pt-16">
+        <svg aria-hidden viewBox="0 0 64 64" className="star-float pointer-events-none absolute -bottom-4 end-6 h-28 w-28 text-[var(--color-accent)] opacity-30"><path d="M32 4l7 17 17 7-17 7-7 17-7-17-17-7 17-7z" fill="currentColor" /></svg>
+        <div className="relative mx-auto max-w-6xl px-4">
           <h1 className="rise max-w-2xl text-3xl font-bold leading-tight sm:text-5xl sm:leading-[1.25]">{t('marketTitle')}</h1>
           <p className="rise mt-4 max-w-xl text-base text-white/75 sm:text-lg" style={{ animationDelay: '80ms' }}>{t('marketSub')}</p>
           <div className="rise mt-8 flex max-w-xl items-center rounded-2xl bg-white p-1.5 shadow-lg" style={{ animationDelay: '160ms' }}>
@@ -73,8 +80,8 @@ export default function Home() {
             const on = sector === s.Code;
             return (
               <button key={s.Code} onClick={() => setSector(on ? '' : s.Code)} aria-pressed={on}
-                className={`flex items-center gap-3 rounded-2xl p-4 text-start shadow-md transition-colors ${on ? 'bg-[var(--color-accent)] text-cyan-950' : 'bg-white hover:bg-cyan-50 dark:bg-slate-900 dark:hover:bg-slate-800'}`}>
-                <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${on ? 'bg-white/40' : 'bg-cyan-100 text-cyan-800 dark:bg-slate-800 dark:text-cyan-300'}`}><SectorIcon code={s.Code} /></span>
+                onPointerMove={glowMove} className={`tile glow flex items-center gap-3 rounded-2xl p-4 text-start shadow-md ${on ? 'bg-[var(--color-accent)] text-cyan-950' : 'bg-white hover:bg-cyan-50 dark:bg-slate-900 dark:hover:bg-slate-800'}`}>
+                <span className={`tile-ico flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${on ? 'bg-white/40' : 'bg-cyan-100 text-cyan-800 dark:bg-slate-800 dark:text-cyan-300'}`}><SectorIcon code={s.Code} /></span>
                 <span className="min-w-0"><span className="block truncate font-semibold">{name(s)}</span><span className={`block text-xs ${on ? 'text-cyan-950/70' : 'text-slate-500'}`}>{s.Companies}</span></span>
               </button>
             );
@@ -89,14 +96,32 @@ export default function Home() {
             <Link to="/join" className="mt-3 inline-block rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-800">{t('joinAsCompany')}</Link>
           </div>
         ) : (
-          <div className="grid gap-4 pb-16 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((c) => {
+          <div className="pb-16">
+            {!sector && !q.trim() && (() => {
+              const c = items[0];
               const color = c.PrimaryColor ?? '#0f3f8f';
               return (
-                <Link key={c.Slug} to={`/c/${c.Slug}`} className="group overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 transition-shadow hover:shadow-lg dark:bg-slate-900 dark:ring-slate-800">
+                <Link to={`/c/${c.Slug}`} onPointerMove={glowMove} className="card-lift glow lattice rise mb-5 flex items-center gap-4 rounded-3xl p-5 text-white shadow-lg sm:p-7" style={{ background: color }}>
+                  <span className="logo-pop flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white text-2xl font-bold shadow sm:h-20 sm:w-20" style={{ color }}>
+                    {c.LogoUrl ? <img src={c.LogoUrl} alt="" className="h-full w-full object-cover" /> : c.Name.slice(0, 1)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="shine inline-block rounded-full bg-[var(--color-accent)] px-3 py-0.5 text-xs font-bold text-cyan-950">{t('newBadge')}</span>
+                    <span className="mt-1 block truncate text-xl font-bold sm:text-2xl">{c.Name}</span>
+                    <span className="block text-sm text-white/80">{t('welcomeNew')}</span>
+                  </span>
+                  <span className="hidden rounded-xl bg-white px-4 py-2 text-sm font-semibold text-cyan-900 sm:block">{t('openStore')}</span>
+                </Link>
+              );
+            })()}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {(!sector && !q.trim() ? items.slice(1) : items).map((c) => {
+              const color = c.PrimaryColor ?? '#0f3f8f';
+              return (
+                <Link key={c.Slug} to={`/c/${c.Slug}`} onPointerMove={glowMove} className="card-lift glow group overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
                   <div className="lattice h-20" style={{ background: color }} />
                   <div className="-mt-8 px-4 pb-4">
-                    <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white text-2xl font-bold shadow ring-4 ring-white dark:bg-slate-800 dark:ring-slate-900" style={{ color }}>
+                    <div className="logo-pop flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white text-2xl font-bold shadow ring-4 ring-white dark:bg-slate-800 dark:ring-slate-900" style={{ color }}>
                       {c.LogoUrl ? <img src={c.LogoUrl} alt="" className="h-full w-full object-cover" /> : c.Name.slice(0, 1)}
                     </div>
                     <div className="mt-3 font-semibold">{c.Name}</div>
@@ -110,6 +135,7 @@ export default function Home() {
                 </Link>
               );
             })}
+          </div>
           </div>
         )}
       </div>

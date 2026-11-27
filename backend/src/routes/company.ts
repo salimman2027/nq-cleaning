@@ -4,9 +4,31 @@ import { query, withTx } from '../db';
 import { HttpError, h, parse } from '../errors';
 import { requirePerm, invalidateCompanyStatus } from '../auth/middleware';
 import { CR_RE, SLUG_RE, VAT_RE, missingForReview, nationalAddressSchema } from '../lib/company';
+import { DOC_KINDS, MAX_DOC_BYTES, mismatches, safeFileName, sniffMime, type DocKind, type Extracted } from '../lib/documents';
+import { extractFromFile, extractionEnabled } from '../services/extract';
+
+export function sendFile(res: import('express').Response, d: Record<string, any>): void {
+  res.setHeader('Content-Type', d.MimeType);
+  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(d.FileName)}"`);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.send(d.Data);
+}
 
 export const companyRouter = Router();
 companyRouter.use(requirePerm('company.profile.manage'));
+
+export async function listDocuments(companyId: number, entered: { crNumber?: string | null; vatNumber?: string | null; nationalAddress?: unknown }) {
+  const rows = await query<Record<string, any>>(
+    `SELECT Id, Kind, FileName, MimeType, SizeBytes, Extracted, ExtractStatus, UploadedAt FROM CompanyDocuments WHERE CompanyId=@c AND IsCurrent=1`,
+    { c: companyId },
+  );
+  return rows.map((d) => {
+    const extracted: Extracted | null = d.Extracted ? JSON.parse(d.Extracted) : null;
+    return { id: d.Id, kind: d.Kind as DocKind, fileName: d.FileName, mimeType: d.MimeType, sizeBytes: d.SizeBytes, uploadedAt: d.UploadedAt, extractStatus: d.ExtractStatus, extracted, mismatch: mismatches(extracted, entered) };
+  });
+}
 
 async function loadProfile(companyId: number) {
   const c = (await query<Record<string, any>>(
@@ -17,12 +39,15 @@ async function loadProfile(companyId: number) {
   if (!c) throw new HttpError(404, 'NOT_FOUND', 'Company not found');
   const sectors = await query<{ Code: string }>(`SELECT s.Code FROM CompanySectors cs JOIN Sectors s ON s.Id=cs.SectorId WHERE cs.CompanyId=@c`, { c: companyId });
   const address = c.NationalAddress ? JSON.parse(c.NationalAddress) : null;
+  const documents = await listDocuments(companyId, { crNumber: c.CrNumber, vatNumber: c.VatNumber, nationalAddress: address });
+  const missingDocs = DOC_KINDS.filter((k) => !documents.some((d) => d.kind === k));
   return {
+    documents, extractionEnabled: extractionEnabled(),
     id: c.Id, name: c.Name, slug: c.Slug, phone: c.Phone, status: c.Status, description: c.Description, logoUrl: c.LogoUrl,
     primaryColor: c.PrimaryColor, crNumber: c.CrNumber, vatNumber: c.VatNumber, nationalAddress: address,
     submittedAt: c.SubmittedAt, reviewedAt: c.ReviewedAt, reviewNote: c.Status === 'rejected' ? c.ReviewNote : null,
     sectorCodes: sectors.map((s) => s.Code),
-    missing: missingForReview({ name: c.Name, crNumber: c.CrNumber, vatNumber: c.VatNumber, nationalAddress: address, sectorCount: sectors.length }),
+    missing: [...missingForReview({ name: c.Name, crNumber: c.CrNumber, vatNumber: c.VatNumber, nationalAddress: address, sectorCount: sectors.length }), ...missingDocs.map((k) => `doc:${k}`)],
   };
 }
 
@@ -89,6 +114,46 @@ companyRouter.put(
       }
     });
     res.json(await loadProfile(cid));
+  }),
+);
+
+const uploadSchema = z.object({ fileName: z.string().min(1).max(200), dataBase64: z.string().min(20) });
+
+/** Upload (or replace) one official document. Values read from the file are returned as suggestions only. */
+companyRouter.put(
+  '/documents/:kind',
+  h(async (req, res) => {
+    const kind = parse(z.enum(DOC_KINDS), req.params.kind);
+    const b = parse(uploadSchema, req.body);
+    const cid = req.user!.companyId;
+    const cur = await loadProfile(cid);
+    if (cur.status !== 'draft' && cur.status !== 'rejected') throw new HttpError(409, 'COMPANY_LOCKED', `Documents cannot be changed while ${cur.status}`);
+    const data = Buffer.from(b.dataBase64.replace(/^data:[^,]*,/, ''), 'base64');
+    if (data.length === 0) throw new HttpError(400, 'EMPTY_FILE', 'File is empty');
+    if (data.length > MAX_DOC_BYTES) throw new HttpError(413, 'FILE_TOO_LARGE', 'File must be 5 MB or smaller');
+    const mime = sniffMime(data);
+    if (!mime) throw new HttpError(415, 'UNSUPPORTED_FILE', 'Only PDF, PNG, JPG or WEBP files are accepted');
+    const ex = await extractFromFile(kind, mime, data);
+    await withTx(async (tx) => {
+      await query(`UPDATE CompanyDocuments SET IsCurrent=0 WHERE CompanyId=@c AND Kind=@k AND IsCurrent=1`, { c: cid, k: kind }, tx);
+      await query(
+        `INSERT INTO CompanyDocuments (CompanyId, Kind, FileName, MimeType, SizeBytes, Data, Extracted, ExtractStatus, UploadedBy)
+         VALUES (@c,@k,@n,@m,@s,@d,@x,@st,@u)`,
+        { c: cid, k: kind, n: safeFileName(b.fileName), m: mime, s: data.length, d: data, x: Object.keys(ex.values).length ? JSON.stringify(ex.values) : null, st: ex.status, u: req.user!.id },
+        tx,
+      );
+    });
+    res.json(await loadProfile(cid));
+  }),
+);
+
+companyRouter.get(
+  '/documents/:kind/file',
+  h(async (req, res) => {
+    const kind = parse(z.enum(DOC_KINDS), req.params.kind);
+    const d = (await query<Record<string, any>>(`SELECT TOP 1 FileName, MimeType, Data FROM CompanyDocuments WHERE CompanyId=@c AND Kind=@k AND IsCurrent=1`, { c: req.user!.companyId, k: kind }))[0];
+    if (!d) throw new HttpError(404, 'NOT_FOUND', 'Document not found');
+    sendFile(res, d);
   }),
 );
 
