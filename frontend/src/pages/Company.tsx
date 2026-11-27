@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, fileToBase64, openFile } from '../api';
 import { useAuth } from '../auth';
 import { useI18n, type Key } from '../i18n';
-import { Button, ErrorBox, Field, Input, Modal, Skeleton } from '../ui';
+import { Button, ErrorBox, Field, ImageUpload, Input, Modal, Skeleton } from '../ui';
 
 interface Addr { buildingNo: string; street: string; district: string; city: string; postalCode: string; additionalNo: string }
 interface Profile {
@@ -121,8 +121,8 @@ export default function Company() {
         <Field label={t('companyName')}><Input className={red('name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
         <Field label={t('slugLabel')}><Input dir="ltr" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase() })} /></Field>
         <Field label={t('description')}><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
-        <Field label={t('logoUrl')}><Input dir="ltr" placeholder="https://…" value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} /></Field>
-        <Field label={t('coverUrl')}><Input dir="ltr" placeholder="https://…" value={form.coverUrl} onChange={(e) => setForm({ ...form, coverUrl: e.target.value })} /></Field>
+        <Field label={t('logoUrl').replace(/^رابط |\s*URL|\s*\(https\)/g, '')}><ImageUpload value={form.logoUrl} onChange={(u) => setForm({ ...form, logoUrl: u })} round /></Field>
+        <Field label={t('coverUrl').replace(/^رابط |\s*URL|\s*\(https\)/g, '')}><ImageUpload value={form.coverUrl} onChange={(u) => setForm({ ...form, coverUrl: u })} /></Field>
         <Field label={t('brandColor')}><Input type="color" value={form.primaryColor || '#0f3f8f'} onChange={(e) => setForm({ ...form, primaryColor: e.target.value })} /></Field>
         <Field label={t('cr')}><Input className={red('cr')} dir="ltr" inputMode="numeric" disabled={locked} value={form.crNumber} onChange={(e) => setForm({ ...form, crNumber: e.target.value })} /></Field>
         <Field label={t('vat')}><Input className={red('vat')} dir="ltr" inputMode="numeric" disabled={locked} value={form.vatNumber} onChange={(e) => setForm({ ...form, vatNumber: e.target.value })} /></Field>

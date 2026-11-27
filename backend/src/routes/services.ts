@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { dt, money, query, withTx } from '../db';
 import { HttpError, h, parse } from '../errors';
 import { requirePerm } from '../auth/middleware';
+import { imageRef } from '../lib/company';
 
 export const servicesRouter = Router();
 
@@ -15,7 +16,10 @@ const serviceSchema = z.object({
   defaultTechnicians: z.number().int().min(1).max(50).default(1),
   price: z.number().min(0).max(1_000_000),
   unit: z.string().max(20).default('unit'),
-  imageUrl: z.string().url().max(500).refine((u) => u.startsWith('https://'), 'https only').nullable().optional(),
+  imageUrl: imageRef,
+  description: z.string().trim().max(1000).nullable().optional(),
+  includes: z.array(z.string().trim().min(1).max(120)).max(10).optional(),
+  notes: z.string().trim().max(500).nullable().optional(),
   category: z.string().trim().max(80).nullable().optional(),
 });
 
@@ -24,7 +28,7 @@ servicesRouter.get(
   requirePerm('services.view'),
   h(async (req, res) => {
     const rows = await query(
-      `SELECT s.Id, s.Name, s.PricingMethod, s.DefaultMinutes, s.DefaultTechnicians, s.IsActive, s.ImageUrl, s.Category,
+      `SELECT s.Id, s.Name, s.PricingMethod, s.DefaultMinutes, s.DefaultTechnicians, s.IsActive, s.ImageUrl, s.Category, s.Description, s.Includes, s.Notes,
               p.Price AS CurrentPrice, p.Unit
          FROM Services s
          OUTER APPLY (SELECT TOP 1 Price, Unit FROM ServicePrices sp
@@ -45,8 +49,8 @@ servicesRouter.post(
     const b = parse(serviceSchema, req.body);
     const id = await withTx(async (tx) => {
       const r = await query<{ Id: number }>(
-        `INSERT INTO Services (CompanyId, Name, PricingMethod, DefaultMinutes, DefaultTechnicians, ImageUrl, Category) OUTPUT INSERTED.Id VALUES (@c,@n,@pm,@dm,@dt,@im,@cat)`,
-        { c: req.user!.companyId, n: b.name, pm: b.pricingMethod, dm: b.defaultMinutes, dt: b.defaultTechnicians, im: b.imageUrl ?? null, cat: b.category || null },
+        `INSERT INTO Services (CompanyId, Name, PricingMethod, DefaultMinutes, DefaultTechnicians, ImageUrl, Category, Description, Includes, Notes) OUTPUT INSERTED.Id VALUES (@c,@n,@pm,@dm,@dt,@im,@cat,@de,@inc,@no)`,
+        { c: req.user!.companyId, n: b.name, pm: b.pricingMethod, dm: b.defaultMinutes, dt: b.defaultTechnicians, im: b.imageUrl ?? null, cat: b.category || null, de: b.description || null, inc: b.includes?.length ? b.includes.join('\n') : null, no: b.notes || null },
         tx,
       );
       const sid = Number(r[0].Id);
@@ -66,11 +70,13 @@ servicesRouter.put(
   requirePerm('services.manage'),
   h(async (req, res) => {
     const id = parse(z.coerce.number().int().positive(), req.params.id);
-    const b = parse(serviceSchema.pick({ name: true, pricingMethod: true, defaultMinutes: true, defaultTechnicians: true, imageUrl: true, category: true }).extend({ isActive: z.boolean().default(true) }), req.body);
+    const b = parse(serviceSchema.pick({ name: true, pricingMethod: true, defaultMinutes: true, defaultTechnicians: true, imageUrl: true, category: true, description: true, includes: true, notes: true }).extend({ isActive: z.boolean().default(true) }), req.body);
     const r = await query(
       `UPDATE Services SET Name=@n, PricingMethod=@pm, DefaultMinutes=@dm, DefaultTechnicians=@dt, IsActive=@a,
-              ImageUrl = CASE WHEN @hasIm = 1 THEN @im ELSE ImageUrl END, Category = CASE WHEN @hasCat = 1 THEN @cat ELSE Category END OUTPUT INSERTED.Id WHERE Id=@i AND CompanyId=@c AND IsDeleted=0`,
-      { i: id, c: req.user!.companyId, n: b.name, pm: b.pricingMethod, dm: b.defaultMinutes, dt: b.defaultTechnicians, a: b.isActive, hasIm: b.imageUrl !== undefined ? 1 : 0, im: b.imageUrl ?? null, hasCat: b.category !== undefined ? 1 : 0, cat: b.category || null },
+              ImageUrl = CASE WHEN @hasIm = 1 THEN @im ELSE ImageUrl END, Category = CASE WHEN @hasCat = 1 THEN @cat ELSE Category END,
+              Description = CASE WHEN @hasDe = 1 THEN @de ELSE Description END, Includes = CASE WHEN @hasInc = 1 THEN @inc ELSE Includes END, Notes = CASE WHEN @hasNo = 1 THEN @no ELSE Notes END OUTPUT INSERTED.Id WHERE Id=@i AND CompanyId=@c AND IsDeleted=0`,
+      { i: id, c: req.user!.companyId, n: b.name, pm: b.pricingMethod, dm: b.defaultMinutes, dt: b.defaultTechnicians, a: b.isActive, hasIm: b.imageUrl !== undefined ? 1 : 0, im: b.imageUrl ?? null, hasCat: b.category !== undefined ? 1 : 0, cat: b.category || null,
+        hasDe: b.description !== undefined ? 1 : 0, de: b.description || null, hasInc: b.includes !== undefined ? 1 : 0, inc: b.includes?.length ? b.includes.join('\n') : null, hasNo: b.notes !== undefined ? 1 : 0, no: b.notes || null },
     );
     if (!r[0]) throw new HttpError(404, 'NOT_FOUND', 'Service not found');
     res.json({ id });

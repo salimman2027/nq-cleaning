@@ -34,3 +34,6 @@ export function missingForReview(p: ProfileForSubmit): string[] {
 }
 
 export const newSlug = (rand: string): string => `co-${rand}`;
+
+/** An image reference: a file uploaded to this platform (/api/media/N) or an https URL. */
+export const imageRef = z.string().max(500).refine((u) => /^\/api\/media\/\d+$/.test(u) || (u.startsWith('https://') && z.string().url().safeParse(u).success), 'Image must be an upload or an https URL').nullable().optional();

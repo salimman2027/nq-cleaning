@@ -14,6 +14,7 @@ import { customersRouter } from './routes/customers';
 import { servicesRouter } from './routes/services';
 import { techniciansRouter } from './routes/technicians';
 import { bookingsRouter } from './routes/bookings';
+import { mediaRouter } from './routes/media';
 import { requestsRouter } from './routes/requests';
 import { dashboardRouter } from './routes/dashboard';
 import { usersRouter } from './routes/users';
@@ -30,7 +31,7 @@ export function createApp(): express.Express {
   app.set('trust proxy', 1); // behind IIS ARR / nginx
   // The default CSP adds "upgrade-insecure-requests", which blanks the page on a host that has no HTTPS certificate yet.
   // HTTPS is enforced by the host (IIS / the hosting panel), not by this header.
-  app.use(helmet({ contentSecurityPolicy: { useDefaults: true, directives: { 'upgrade-insecure-requests': null } }, hsts: false }));
+  app.use(helmet({ contentSecurityPolicy: { useDefaults: true, directives: { 'upgrade-insecure-requests': null, 'img-src': ["'self'", 'data:', 'blob:', 'https:'] } }, hsts: false }));
   app.use(
     cors({
       origin: (origin, cb) => {
@@ -41,6 +42,7 @@ export function createApp(): express.Express {
   );
   // Document uploads travel as base64 JSON (5 MB file ≈ 6.7 MB), so this one route gets a larger limit.
   app.use('/api/company/documents', express.json({ limit: '8mb' }));
+  app.use('/api/media', express.json({ limit: '4mb' }));
   app.use(express.json({ limit: '1mb' }));
   app.use(rateLimit({ windowMs: 60_000, limit: 600, standardHeaders: true, legacyHeaders: false, skip: () => config.env === 'test' }));
 
@@ -52,6 +54,7 @@ export function createApp(): express.Express {
   api.use('/auth', authRouter);
   api.use('/onboarding', onboardingRouter);
   api.use('/market', marketRouter);
+  api.use('/media', mediaRouter);
   api.use('/company', authenticate, companyRouter);
   api.use('/platform', authenticate, platformRouter);
   api.use('/customers', authenticate, requireApprovedCompany, customersRouter);

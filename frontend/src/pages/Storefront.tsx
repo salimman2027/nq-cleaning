@@ -3,13 +3,13 @@ import { Link, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useI18n, type Key } from '../i18n';
 import { SectorIcon } from '../sectorIcons';
-import { ErrorBox, money, Skeleton } from '../ui';
+import { ErrorBox, Modal, money, Skeleton } from '../ui';
 import { PublicShell } from './Home';
 
 interface Store {
   slug: string; name: string; description: string | null; logoUrl: string | null; coverUrl?: string | null; primaryColor: string | null;
   sectors: { Code: string; NameAr: string; NameEn: string }[];
-  services: { Id: number; Name: string; DefaultMinutes: number; FromPrice: number | null; ImageUrl: string | null; Category: string | null }[];
+  services: { Id: number; Name: string; DefaultMinutes: number; FromPrice: number | null; ImageUrl: string | null; Category: string | null; Description: string | null; Includes: string | null; Notes: string | null }[];
 }
 
 function RequestForm({ store, color, picked }: { store: Store; color: string; picked: string }) {
@@ -58,6 +58,8 @@ export default function Storefront() {
   }, [slug, t]);
   const color = s?.primaryColor ?? '#0f3f8f';
   const [picked, setPicked] = useState('');
+  const [detail, setDetail] = useState<Store['services'][number] | null>(null);
+  const order = (id: number) => { setDetail(null); setPicked(String(id)); setTimeout(() => document.getElementById('request')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50); };
   const groups = (() => {
     const m = new Map<string, Store['services']>();
     for (const x of s?.services ?? []) { const k = x.Category || t('otherServices'); m.set(k, [...(m.get(k) ?? []), x]); }
@@ -108,14 +110,29 @@ export default function Storefront() {
                       <div className="p-3">
                         <div className="text-xs text-slate-500">{x.DefaultMinutes} {t('minutes')}</div>
                         <div className="mt-1 h-6 font-bold" style={{ color }}>{x.FromPrice != null && <><span className="me-1 text-xs font-normal text-slate-500">{t('servicesFrom')}</span>{money(x.FromPrice, lang)}</>}</div>
-                        <button onClick={() => { setPicked(String(x.Id)); document.getElementById('request')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}
-                          className="tile mt-2 w-full rounded-full px-3 py-2 text-sm font-semibold text-white" style={{ background: color }}>{t('orderNow')}</button>
+                        <div className="mt-2 flex gap-2">
+                          <button onClick={() => setDetail(x)} className="tile flex-1 rounded-full border px-2 py-2 text-sm font-medium" style={{ color, borderColor: color }}>{t('details')}</button>
+                          <button onClick={() => order(x.Id)} className="tile flex-1 rounded-full px-2 py-2 text-sm font-semibold text-white" style={{ background: color }}>{t('orderNow')}</button>
+                        </div>
                       </div>
                     </article>
                   ))}
                 </div>
               </section>
             ))}
+            {detail && (
+              <Modal title={detail.Name} onClose={() => setDetail(null)}>
+                {detail.ImageUrl && <img src={detail.ImageUrl} alt="" className="mb-3 h-48 w-full rounded-xl object-cover" />}
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-800">{detail.DefaultMinutes} {t('minutes')}</span>
+                  {detail.FromPrice != null && <span className="font-bold" style={{ color }}>{t('servicesFrom')} {money(detail.FromPrice, lang)}</span>}
+                </div>
+                {detail.Description && <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">{detail.Description}</p>}
+                {detail.Includes && <><h3 className="mb-1 text-sm font-semibold">{t('includesTitle')}</h3><ul className="mb-3 list-disc space-y-1 ps-5 text-sm">{detail.Includes.split('\n').map((i) => <li key={i}>{i}</li>)}</ul></>}
+                {detail.Notes && <><h3 className="mb-1 text-sm font-semibold">{t('notesTitle')}</h3><p className="mb-3 rounded-lg bg-amber-50 p-2.5 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">{detail.Notes}</p></>}
+                <button onClick={() => order(detail.Id)} className="tile w-full rounded-xl px-4 py-3 font-semibold text-white" style={{ background: color }}>{t('orderNow')}</button>
+              </Modal>
+            )}
             {s.services.length > 0 && <RequestForm store={s} color={color} picked={picked} />}
           </main>
         </>

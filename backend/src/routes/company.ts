@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { query, withTx } from '../db';
 import { HttpError, h, parse } from '../errors';
 import { requirePerm, invalidateCompanyStatus } from '../auth/middleware';
-import { CR_RE, SLUG_RE, VAT_RE, missingForReview, nationalAddressSchema } from '../lib/company';
+import { CR_RE, SLUG_RE, imageRef, VAT_RE, missingForReview, nationalAddressSchema } from '../lib/company';
 import { DOC_KINDS, MAX_DOC_BYTES, isCompleteAddress, mismatches, safeFileName, sniffMime, type DocKind, type Extracted } from '../lib/documents';
 import { extractFromFile, extractionEnabled } from '../services/extract';
 
@@ -57,8 +57,8 @@ const updateSchema = z.object({
   name: z.string().trim().min(2).max(200).optional(),
   slug: z.string().regex(SLUG_RE).optional(),
   description: z.string().max(1000).nullable().optional(),
-  logoUrl: z.string().url().max(500).refine((u) => u.startsWith('https://'), 'https only').nullable().optional(),
-  coverUrl: z.string().url().max(500).refine((u) => u.startsWith('https://'), 'https only').nullable().optional(),
+  logoUrl: imageRef,
+  coverUrl: imageRef,
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
   crNumber: z.string().regex(CR_RE).optional(),
   vatNumber: z.string().regex(VAT_RE).optional(),

@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { api, ApiError, fileToBase64 } from './api';
+import { useI18n } from './i18n';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 
 const base = 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-cyan-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100';
@@ -54,3 +56,35 @@ export const money = (n: number | string | null | undefined, lang = 'ar') =>
   new Intl.NumberFormat(lang === 'ar' ? 'ar-SA' : 'en-US', { style: 'currency', currency: 'SAR' }).format(Number(n ?? 0));
 export const dateTime = (s: string, lang = 'ar') =>
   new Date(s).toLocaleString(lang === 'ar' ? 'ar-SA' : 'en-GB', { timeZone: 'Asia/Riyadh', dateStyle: 'medium', timeStyle: 'short' });
+
+/** Image picker: uploads the chosen file to the platform and reports its URL. Shows a preview and a remove button. */
+export function ImageUpload({ value, onChange, round = false }: { value: string; onChange: (url: string) => void; round?: boolean }) {
+  const { t } = useI18n();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const pick = async (f: File | undefined) => {
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { setErr(t('imgTooBig')); return; }
+    setBusy(true); setErr('');
+    try { onChange((await api<{ url: string }>('/media', { method: 'POST', body: { dataBase64: await fileToBase64(f) } })).url); }
+    catch (e) { setErr(e instanceof ApiError && e.code === 'UNSUPPORTED_FILE' ? t('err_UNSUPPORTED_FILE') : t('imgFail')); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="flex items-center gap-3">
+      <div className={`flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden bg-slate-100 text-xs text-slate-400 dark:bg-slate-800 ${round ? 'rounded-full' : 'rounded-lg'}`}>
+        {value ? <img src={value} alt="" className="h-full w-full object-cover" /> : '—'}
+      </div>
+      <div className="space-y-1">
+        <div className="flex gap-2">
+          <label className="cursor-pointer rounded-lg bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-cyan-800">
+            {busy ? t('loading') : value ? t('replaceFile') : t('uploadImage')}
+            <input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
+          {value && <button type="button" onClick={() => onChange('')} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-600">{t('removeImage')}</button>}
+        </div>
+        {err && <p className="text-xs text-red-600">{err}</p>}
+      </div>
+    </div>
+  );
+}
