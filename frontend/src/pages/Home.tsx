@@ -1,30 +1,36 @@
-import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
-import { ErrorBox, Input, Skeleton } from '../ui';
+import { SectorIcon } from '../sectorIcons';
+import { ErrorBox, Skeleton } from '../ui';
 
 interface Sector { Code: string; NameAr: string; NameEn: string; Companies: number }
 interface Co { Slug: string; Name: string; Description: string | null; LogoUrl: string | null; PrimaryColor: string | null; Sectors: string[] }
 
-export function PublicShell({ children }: { children: ReactNode }) {
+export function PublicShell({ children, flush = false }: { children: ReactNode; flush?: boolean }) {
   const { t, toggle } = useI18n();
   const { me } = useAuth();
   const [logo, setLogo] = useState<string | null>(null);
   useEffect(() => { api<{ logoUrl: string | null }>('/market/brand').then((r) => setLogo(r.logoUrl)).catch(() => undefined); }, []);
   return (
-    <div className="min-h-full bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
-        <Link to="/" className="flex items-center gap-2 font-bold text-cyan-700 dark:text-cyan-400">{logo && <img src={logo} alt="" className="h-8 w-auto" />}<span>{t('app')}</span></Link>
-        <nav className="flex items-center gap-2 text-sm">
-          <Link to="/join" className="rounded-lg border px-3 py-1 dark:border-slate-700">{t('joinAsCompany')}</Link>
-          <Link to={me ? '/app' : '/login'} className="rounded-lg bg-cyan-700 px-3 py-1 text-white">{me ? t('company') : t('companyLogin')}</Link>
-          <button onClick={toggle} className="rounded-lg border px-3 py-1 dark:border-slate-700">{t('lang')}</button>
-        </nav>
+    <div className="min-h-full bg-[#f4f6fa] text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      <header className="lattice bg-cyan-900 text-white">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4">
+          <Link to="/" className="flex items-center gap-2.5 text-lg font-bold">
+            {logo ? <img src={logo} alt="" className="h-9 w-auto" /> : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-accent)] text-base font-bold text-cyan-950">NQ</span>}
+            <span>{t('app')}</span>
+          </Link>
+          <nav className="flex items-center gap-2 text-sm">
+            <Link to="/join" className="hidden rounded-lg px-3 py-2 text-white/85 hover:bg-white/10 sm:block">{t('joinAsCompany')}</Link>
+            <Link to={me ? '/app' : '/login'} className="rounded-lg bg-white px-4 py-2 font-medium text-cyan-900 hover:bg-cyan-50">{me ? t('company') : t('companyLogin')}</Link>
+            <button onClick={toggle} className="rounded-lg px-3 py-2 text-white/85 hover:bg-white/10">{t('lang')}</button>
+          </nav>
+        </div>
+        {!flush && <div className="h-0" />}
       </header>
-      <main className="mx-auto max-w-5xl p-4">{children}</main>
+      {children}
     </div>
   );
 }
@@ -37,50 +43,76 @@ export default function Home() {
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    api<{ items: Sector[] }>('/market/sectors').then((r) => setSectors(r.items)).catch(() => setError('Error'));
-  }, []);
+  useEffect(() => { api<{ items: Sector[] }>('/market/sectors').then((r) => setSectors(r.items)).catch(() => setError('Error')); }, []);
   useEffect(() => {
     const p = new URLSearchParams();
     if (sector) p.set('sector', sector);
     if (q.trim()) p.set('q', q.trim());
-    const h = setTimeout(() => {
-      api<{ items: Co[] }>(`/market/companies?${p}`).then((r) => setItems(r.items)).catch(() => setError('Error'));
-    }, 250);
+    const h = setTimeout(() => { api<{ items: Co[] }>(`/market/companies?${p}`).then((r) => setItems(r.items)).catch(() => setError('Error')); }, 250);
     return () => clearTimeout(h);
   }, [sector, q]);
 
-  const chip = (active: boolean) => `whitespace-nowrap rounded-full border px-4 py-1.5 text-sm ${active ? 'border-cyan-700 bg-cyan-700 text-white' : 'border-slate-300 dark:border-slate-700'}`;
+  const name = (s: Sector) => (lang === 'ar' ? s.NameAr : s.NameEn);
   return (
     <PublicShell>
-      <section className="py-6 text-center">
-        <h1 className="text-2xl font-bold sm:text-3xl">{t('marketTitle')}</h1>
-        <p className="mt-2 text-slate-500">{t('marketSub')}</p>
-      </section>
-      {error && <ErrorBox message={error} />}
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-        <button className={chip(sector === '')} onClick={() => setSector('')}>{t('allSectors')}</button>
-        {sectors?.map((s) => (
-          <button key={s.Code} className={chip(sector === s.Code)} onClick={() => setSector(s.Code)}>{lang === 'ar' ? s.NameAr : s.NameEn}</button>
-        ))}
-      </div>
-      <div className="mb-4"><Input placeholder={t('searchCompany')} value={q} onChange={(e) => setQ(e.target.value)} /></div>
-      {!items ? <Skeleton rows={3} /> : items.length === 0 ? <p className="py-10 text-center text-slate-500">{t('noCompanies')}</p> : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((c) => (
-            <Link key={c.Slug} to={`/c/${c.Slug}`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl text-lg font-bold text-white" style={{ background: c.PrimaryColor ?? '#0f3f8f' }}>
-                  {c.LogoUrl ? <img src={c.LogoUrl} alt="" className="h-full w-full object-cover" /> : c.Name.slice(0, 1)}
-                </div>
-                <div className="min-w-0"><div className="truncate font-semibold">{c.Name}</div>
-                  <div className="truncate text-xs text-slate-500">{c.Sectors.map((s) => sectors?.find((x) => x.Code === s)).filter(Boolean).map((s) => (lang === 'ar' ? s!.NameAr : s!.NameEn)).join(' · ')}</div></div>
-              </div>
-              {c.Description && <p className="mt-3 line-clamp-2 text-sm text-slate-600 dark:text-slate-300">{c.Description}</p>}
-            </Link>
-          ))}
+      <section className="lattice bg-cyan-900 pb-24 pt-10 text-white sm:pt-16">
+        <div className="mx-auto max-w-6xl px-4">
+          <h1 className="rise max-w-2xl text-3xl font-bold leading-tight sm:text-5xl sm:leading-[1.25]">{t('marketTitle')}</h1>
+          <p className="rise mt-4 max-w-xl text-base text-white/75 sm:text-lg" style={{ animationDelay: '80ms' }}>{t('marketSub')}</p>
+          <div className="rise mt-8 flex max-w-xl items-center rounded-2xl bg-white p-1.5 shadow-lg" style={{ animationDelay: '160ms' }}>
+            <svg viewBox="0 0 24 24" className="mx-3 h-5 w-5 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4 4" /></svg>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('searchCompany')} className="min-w-0 flex-1 bg-transparent py-2.5 text-base text-slate-900 outline-none placeholder:text-slate-400" />
+          </div>
         </div>
-      )}
+      </section>
+
+      <div className="mx-auto -mt-14 max-w-6xl px-4">
+        {error && <ErrorBox message={error} />}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {(sectors ?? []).map((s) => {
+            const on = sector === s.Code;
+            return (
+              <button key={s.Code} onClick={() => setSector(on ? '' : s.Code)} aria-pressed={on}
+                className={`flex items-center gap-3 rounded-2xl p-4 text-start shadow-md transition-colors ${on ? 'bg-[var(--color-accent)] text-cyan-950' : 'bg-white hover:bg-cyan-50 dark:bg-slate-900 dark:hover:bg-slate-800'}`}>
+                <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${on ? 'bg-white/40' : 'bg-cyan-100 text-cyan-800 dark:bg-slate-800 dark:text-cyan-300'}`}><SectorIcon code={s.Code} /></span>
+                <span className="min-w-0"><span className="block truncate font-semibold">{name(s)}</span><span className={`block text-xs ${on ? 'text-cyan-950/70' : 'text-slate-500'}`}>{s.Companies}</span></span>
+              </button>
+            );
+          })}
+          {!sectors && Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton h-[76px]" />)}
+        </div>
+
+        <h2 className="mb-4 mt-10 text-xl font-bold">{sector ? name(sectors!.find((s) => s.Code === sector)!) : t('allSectors')}</h2>
+        {!items ? <Skeleton rows={3} /> : items.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
+            <p className="font-medium">{t('noCompanies')}</p>
+            <Link to="/join" className="mt-3 inline-block rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-800">{t('joinAsCompany')}</Link>
+          </div>
+        ) : (
+          <div className="grid gap-4 pb-16 sm:grid-cols-2 lg:grid-cols-3">
+            {items.map((c) => {
+              const color = c.PrimaryColor ?? '#0f3f8f';
+              return (
+                <Link key={c.Slug} to={`/c/${c.Slug}`} className="group overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 transition-shadow hover:shadow-lg dark:bg-slate-900 dark:ring-slate-800">
+                  <div className="lattice h-20" style={{ background: color }} />
+                  <div className="-mt-8 px-4 pb-4">
+                    <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white text-2xl font-bold shadow ring-4 ring-white dark:bg-slate-800 dark:ring-slate-900" style={{ color }}>
+                      {c.LogoUrl ? <img src={c.LogoUrl} alt="" className="h-full w-full object-cover" /> : c.Name.slice(0, 1)}
+                    </div>
+                    <div className="mt-3 font-semibold">{c.Name}</div>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {c.Sectors.map((code) => sectors?.find((x) => x.Code === code)).filter(Boolean).map((s) => (
+                        <span key={s!.Code} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300"><SectorIcon code={s!.Code} className="h-3.5 w-3.5" />{name(s!)}</span>
+                      ))}
+                    </div>
+                    {c.Description && <p className="mt-3 line-clamp-2 text-sm text-slate-600 dark:text-slate-300">{c.Description}</p>}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </PublicShell>
   );
 }

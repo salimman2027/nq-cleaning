@@ -46,31 +46,52 @@ export default function Dashboard() {
   const max = Math.max(1, ...d.dailyBookings.map((x) => x.bookings));
   const maxSvc = Math.max(1, ...d.topServices.map((x) => x.bookings));
 
+  const money4 = cards.filter((c) => typeof c.value === 'string');
+  const counts = cards.filter((c) => typeof c.value === 'number');
+  const group = (keys: Key[]) => counts.filter((c) => keys.includes(c.key));
+  const Tile = ({ c, warn }: { c: (typeof cards)[number]; warn?: boolean }) => (
+    <button onClick={() => c.to && nav(c.to)} className="rounded-2xl bg-white p-4 text-start shadow-sm ring-1 ring-slate-200 transition-shadow hover:shadow-md dark:bg-slate-900 dark:ring-slate-800">
+      <div className="text-xs text-slate-500">{t(c.key)}</div>
+      <div className={`mt-1 text-2xl font-bold tabular-nums ${warn && Number(c.value) > 0 ? 'text-red-600' : ''}`}>{c.value}</div>
+    </button>
+  );
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {cards.map((c) => (
-          <button key={c.key} onClick={() => c.to && nav(c.to)} className="rounded-xl bg-white p-4 text-start shadow-sm hover:shadow dark:bg-slate-900">
-            <div className="text-xs text-slate-500">{t(c.key)}</div>
-            <div className="mt-1 text-2xl font-bold">{c.value}</div>
-          </button>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {money4.map((c, i) => (
+          <div key={c.key} className={`rounded-2xl p-4 ${i === 1 ? 'lattice bg-cyan-900 text-white' : 'bg-white ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800'}`}>
+            <div className={`text-xs ${i === 1 ? 'text-white/70' : 'text-slate-500'}`}>{t(c.key)}</div>
+            <div className="mt-1 text-xl font-bold tabular-nums sm:text-2xl">{c.value}</div>
+          </div>
         ))}
       </div>
+      <section>
+        <h3 className="mb-2 text-sm font-semibold text-slate-500">{t('bookings')}</h3>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {group(['todayTotal', 'todayNew', 'todayConfirmed', 'todayInProgress', 'todayDone', 'tomorrow']).map((c) => <Tile key={c.key} c={c} />)}
+          {group(['unassigned', 'late', 'todayCancelled']).map((c) => <Tile key={c.key} c={c} warn />)}
+        </div>
+      </section>
+      <section>
+        <h3 className="mb-2 text-sm font-semibold text-slate-500">{t('technicians')}</h3>
+        <div className="grid grid-cols-3 gap-3">{group(['techAvailable', 'techBusy', 'techAbsent']).map((c) => <Tile key={c.key} c={c} />)}</div>
+      </section>
       <div className="grid gap-4 md:grid-cols-2">
-        <section className="rounded-xl bg-white p-4 dark:bg-slate-900">
+        <section className="rounded-2xl bg-white p-4 ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
           <h3 className="mb-3 font-semibold">{t('daily')}</h3>
           {d.dailyBookings.length === 0 ? <p className="text-sm text-slate-500">{t('noData')}</p> : (
             <div className="flex h-40 items-end gap-1">
               {d.dailyBookings.map((x) => (
                 <div key={x.day} className="flex flex-1 flex-col items-center justify-end" title={`${x.day}: ${x.bookings}`}>
-                  <div className="w-full rounded-t bg-cyan-600" style={{ height: `${(x.bookings / max) * 100}%` }} />
+                  <div className="w-full rounded-t bg-cyan-700" style={{ height: `${(x.bookings / max) * 100}%` }} />
                   <span className="mt-1 text-[10px] text-slate-500">{String(x.day).slice(8, 10)}</span>
                 </div>
               ))}
             </div>
           )}
         </section>
-        <section className="rounded-xl bg-white p-4 dark:bg-slate-900">
+        <section className="rounded-2xl bg-white p-4 ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
           <h3 className="mb-3 font-semibold">{t('topServices')}</h3>
           {d.topServices.length === 0 ? <p className="text-sm text-slate-500">{t('noData')}</p> : d.topServices.map((s) => (
             <div key={s.Name} className="mb-2">

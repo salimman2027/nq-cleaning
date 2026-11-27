@@ -43,7 +43,7 @@ export default function Register() {
 
   return (
     <PublicShell>
-      <div className="mx-auto max-w-md rounded-2xl bg-white p-6 shadow dark:bg-slate-900">
+      <div className="mx-auto my-8 max-w-md rounded-2xl bg-white p-6 shadow-md ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
         <h1 className="mb-1 text-xl font-bold">{t('registerTitle')}</h1>
         <p className="mb-4 text-xs text-slate-500">{t('step')} {step}/2</p>
         {error && <div className="mb-3"><ErrorBox message={error} /></div>}

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
@@ -42,9 +43,15 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-slate-50 p-4 dark:bg-slate-950 dark:text-slate-100">
-      <form onSubmit={submit} className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow dark:bg-slate-900">
-        <h1 className="text-center text-2xl font-bold text-cyan-700 dark:text-cyan-400">{t('app')}</h1>
+    <div className="grid min-h-full lg:grid-cols-2 dark:bg-slate-950 dark:text-slate-100">
+      <aside className="lattice hidden flex-col justify-between bg-cyan-900 p-10 text-white lg:flex">
+        <Link to="/" className="flex items-center gap-2.5 text-lg font-bold"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-accent)] text-base text-cyan-950">NQ</span>{t('app')}</Link>
+        <div><p className="max-w-sm text-3xl font-bold leading-snug">{t('marketTitle')}</p><p className="mt-3 max-w-sm text-white/70">{t('marketSub')}</p></div>
+        <Link to="/join" className="text-sm text-white/80 hover:text-white">{t('joinAsCompany')}</Link>
+      </aside>
+      <div className="flex items-center justify-center bg-[#f4f6fa] p-6 dark:bg-slate-950">
+        <form onSubmit={submit} className="w-full max-w-sm space-y-4">
+        <h1 className="text-2xl font-bold">{t('login')}</h1>
         {mode === 'email' ? (
           <>
             <Field label={t('email')}><Input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
@@ -62,6 +69,7 @@ export default function Login() {
         <button type="button" onClick={() => { setMode(mode === 'email' ? 'phone' : 'email'); setSent(false); setError(''); }} className="w-full text-sm text-cyan-700 dark:text-cyan-400">{mode === 'email' ? t('signInPhone') : t('signInEmail')}</button>
         <button type="button" onClick={toggle} className="w-full text-sm text-slate-500">{t('lang')}</button>
       </form>
+      </div>
     </div>
   );
 }

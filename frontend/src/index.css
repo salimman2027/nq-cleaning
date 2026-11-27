@@ -9,6 +9,16 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 html, body, #root { height: 100%; }
-body { font-family: system-ui, "Segoe UI", Tahoma, "Noto Sans Arabic", sans-serif; }
+body { font-family: "IBM Plex Sans Arabic", system-ui, "Segoe UI", Tahoma, sans-serif; letter-spacing: 0; }
+h1, h2, h3 { text-wrap: balance; }
+/* Eight-point star lattice: a quiet nod to Najdi/Islamic geometry, drawn here from scratch. */
+.lattice {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Cpath d='M32 6l6.5 15.5L54 28l-15.5 6.5L32 50l-6.5-15.5L10 28l15.5-6.5z' fill='none' stroke='%23ffffff' stroke-opacity='.07' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 64px 64px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .rise { animation: rise .5s ease-out both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+}
 .skeleton { background: linear-gradient(90deg, rgb(148 163 184 / .2), rgb(148 163 184 / .4), rgb(148 163 184 / .2)); background-size: 200% 100%; animation: sk 1.2s infinite; border-radius: .5rem; }
 @keyframes sk { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }

@@ -45,21 +45,20 @@ function Layout() {
   const links = NAV.filter((n) => can(n.perm) && (approved || n.to === '/app/company'));
 
   return (
-    <div className="flex h-full bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <aside className={`${open ? 'w-56' : 'w-14'} hidden shrink-0 flex-col border-e border-slate-200 bg-white transition-all md:flex dark:border-slate-800 dark:bg-slate-900`}>
-        <button onClick={() => setOpen(!open)} className="p-4 text-start font-bold text-cyan-700 dark:text-cyan-400">{open ? t('app') : 'NQ'}</button>
+    <div className="flex h-full bg-[#f4f6fa] text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      <aside className={`${open ? 'w-60' : 'w-16'} lattice hidden shrink-0 flex-col bg-cyan-900 text-white transition-all md:flex`}>
+        <button onClick={() => setOpen(!open)} className="flex items-center gap-2.5 p-4 text-start text-lg font-bold"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent)] text-base text-cyan-950">NQ</span>{open && <span>{t('app')}</span>}</button>
         <nav className="flex-1 space-y-1 px-2">
           {links.map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.to === '/app'} className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${isActive ? 'bg-cyan-700 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+            <NavLink key={n.to} to={n.to} end={n.to === '/app'} className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${isActive ? 'bg-white font-semibold text-cyan-900' : 'text-white/80 hover:bg-white/10'}`}>
               <span>{n.icon}</span>{open && <span>{t(n.key)}</span>}
             </NavLink>
           ))}
         </nav>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
-          <span className="text-sm text-slate-500">{me.FullName} · {me.CompanyName}</span>
-          <div className="flex items-center gap-2 text-sm">
+        <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"><span className="text-sm font-medium">{me.FullName} <span className="text-slate-400">·</span> <span className="text-slate-500">{me.CompanyName}</span></span>
+                    <div className="flex items-center gap-2 text-sm">
             <button onClick={toggleDark} className="rounded-lg border px-3 py-1 dark:border-slate-700">{t('dark')}</button>
             <button onClick={toggle} className="rounded-lg border px-3 py-1 dark:border-slate-700">{t('lang')}</button>
             <button onClick={logout} className="rounded-lg border px-3 py-1 dark:border-slate-700">{t('logout')}</button>
