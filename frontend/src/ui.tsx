@@ -1,8 +1,25 @@
+import { useState } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 
 const base = 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-cyan-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100';
 
 export function Input(p: InputHTMLAttributes<HTMLInputElement>) { return <input {...p} className={`${base} w-full ${p.className ?? ''}`} />; }
+/** Password field with an eye button that shows or hides the text. */
+export function PasswordInput(p: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input {...p} type={show ? 'text' : 'password'} className={`${base} w-full pe-11 ${p.className ?? ''}`} />
+      <button type="button" onClick={() => setShow(!show)} aria-label={show ? 'Hide password' : 'Show password'} aria-pressed={show}
+        className="absolute inset-y-0 end-0 flex w-11 items-center justify-center text-slate-400 hover:text-cyan-700 focus-visible:text-cyan-700">
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" />
+          {show && <path d="M4 4l16 16" />}
+        </svg>
+      </button>
+    </div>
+  );
+}
 export function Select(p: SelectHTMLAttributes<HTMLSelectElement>) { return <select {...p} className={`${base} w-full ${p.className ?? ''}`} />; }
 
 export function Button({ variant = 'primary', ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'danger' }) {

@@ -4,7 +4,7 @@ import { query, withTx } from '../db';
 import { HttpError, h, parse } from '../errors';
 import { requirePerm, invalidateCompanyStatus } from '../auth/middleware';
 import { CR_RE, SLUG_RE, VAT_RE, missingForReview, nationalAddressSchema } from '../lib/company';
-import { DOC_KINDS, MAX_DOC_BYTES, mismatches, safeFileName, sniffMime, type DocKind, type Extracted } from '../lib/documents';
+import { DOC_KINDS, MAX_DOC_BYTES, isCompleteAddress, mismatches, safeFileName, sniffMime, type DocKind, type Extracted } from '../lib/documents';
 import { extractFromFile, extractionEnabled } from '../services/extract';
 
 export function sendFile(res: import('express').Response, d: Record<string, any>): void {
@@ -146,6 +146,16 @@ companyRouter.put(
         tx,
       );
     });
+    // Fill empty legal fields from what the file says; anything the owner already typed is never overwritten.
+    const v = ex.values;
+    const dupCr = v.crNumber ? (await query(`SELECT TOP 1 1 AS x FROM Companies WHERE CrNumber=@v AND Id<>@c AND IsDeleted=0`, { v: v.crNumber, c: cid })).length > 0 : true;
+    await query(
+      `UPDATE Companies SET CrNumber = CASE WHEN CrNumber IS NULL AND @cr IS NOT NULL THEN @cr ELSE CrNumber END,
+                            VatNumber = CASE WHEN VatNumber IS NULL AND @vat IS NOT NULL THEN @vat ELSE VatNumber END,
+                            NationalAddress = CASE WHEN NationalAddress IS NULL AND @addr IS NOT NULL THEN @addr ELSE NationalAddress END
+        WHERE Id=@c`,
+      { c: cid, cr: dupCr ? null : v.crNumber ?? null, vat: v.vatNumber ?? null, addr: isCompleteAddress(v.nationalAddress) ? JSON.stringify(v.nationalAddress) : null },
+    );
     res.json(await loadProfile(cid));
   }),
 );

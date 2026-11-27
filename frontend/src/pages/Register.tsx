@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
-import { Button, ErrorBox, Field, Input } from '../ui';
+import { Button, ErrorBox, Field, Input, PasswordInput } from '../ui';
 import { PublicShell } from './Home';
 
 interface Sector { Code: string; NameAr: string; NameEn: string }
@@ -64,7 +64,7 @@ export default function Register() {
             <Field label={t('companyName')}><Input required value={f.companyName} onChange={(e) => setF({ ...f, companyName: e.target.value })} /></Field>
             <Field label={t('ownerName')}><Input required value={f.ownerName} onChange={(e) => setF({ ...f, ownerName: e.target.value })} /></Field>
             <Field label={t('email')}><Input type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
-            <Field label={t('password')}><Input type="password" minLength={10} required autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
+            <Field label={t('password')}><PasswordInput minLength={10} required autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
             <div><span className="mb-1 block text-sm text-slate-600 dark:text-slate-300">{t('sectors')}</span>
               <div className="flex flex-wrap gap-2">
                 {sectors.map((s) => (

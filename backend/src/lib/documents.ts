@@ -21,9 +21,10 @@ export function westernDigits(s: string): string {
   return s.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x660)).replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x6f0));
 }
 
-export interface Extracted { crNumber?: string; vatNumber?: string; nationalAddress?: z.infer<typeof nationalAddressSchema> }
+export type AddressParts = Partial<z.infer<typeof nationalAddressSchema>>;
+export interface Extracted { crNumber?: string; vatNumber?: string; nationalAddress?: AddressParts }
 
-/** Validate whatever a model returned against the same rules as manual entry; anything that fails is dropped. */
+/** Validate whatever was read (by a model or by text rules) with the same rules as manual entry; anything that fails is dropped. */
 export function sanitizeExtracted(kind: DocKind, raw: unknown): Extracted {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const clean = (v: unknown) => (typeof v === 'string' ? westernDigits(v).replace(/[\s-]/g, '') : '');
@@ -32,22 +33,59 @@ export function sanitizeExtracted(kind: DocKind, raw: unknown): Extracted {
   if (kind === 'vat') { const v = clean(o.vatNumber); if (VAT_RE.test(v)) out.vatNumber = v; }
   if (kind === 'address') {
     const a = (o.nationalAddress && typeof o.nationalAddress === 'object' ? o.nationalAddress : o) as Record<string, unknown>;
-    const r = nationalAddressSchema.safeParse({
-      buildingNo: clean(a.buildingNo), additionalNo: clean(a.additionalNo), postalCode: clean(a.postalCode),
-      street: typeof a.street === 'string' ? a.street.trim() : '', district: typeof a.district === 'string' ? a.district.trim() : '', city: typeof a.city === 'string' ? a.city.trim() : '',
-    });
-    if (r.success) out.nationalAddress = r.data;
+    const part: AddressParts = {};
+    for (const k of ['buildingNo', 'additionalNo'] as const) { const v = clean(a[k]); if (/^\d{4}$/.test(v)) part[k] = v; }
+    const pc = clean(a.postalCode); if (/^\d{5}$/.test(pc)) part.postalCode = pc;
+    for (const k of ['street', 'district', 'city'] as const) { const v = typeof a[k] === 'string' ? (a[k] as string).trim() : ''; if (v.length >= 2 && v.length <= 120 && !/\d{4,}/.test(v)) part[k] = v; }
+    if (Object.keys(part).length) out.nationalAddress = part;
   }
   return out;
 }
 
-/** Fields where the extracted value disagrees with what the owner typed. */
+export const isCompleteAddress = (a: unknown): a is z.infer<typeof nationalAddressSchema> => nationalAddressSchema.safeParse(a).success;
+
+/** Fields where the extracted value disagrees with what the owner typed (only fields present on both sides are compared). */
 export function mismatches(extracted: Extracted | null, entered: { crNumber?: string | null; vatNumber?: string | null; nationalAddress?: unknown }): string[] {
   const m: string[] = [];
   if (!extracted) return m;
   if (extracted.crNumber && entered.crNumber && extracted.crNumber !== entered.crNumber) m.push('crNumber');
   if (extracted.vatNumber && entered.vatNumber && extracted.vatNumber !== entered.vatNumber) m.push('vatNumber');
-  if (extracted.nationalAddress && entered.nationalAddress && JSON.stringify(sortKeys(extracted.nationalAddress)) !== JSON.stringify(sortKeys(entered.nationalAddress))) m.push('nationalAddress');
+  const ea = extracted.nationalAddress as Record<string, string> | undefined;
+  const na = entered.nationalAddress as Record<string, string> | null | undefined;
+  if (ea && na && Object.keys(ea).some((k) => na[k] !== undefined && ea[k] !== na[k])) m.push('nationalAddress');
   return m;
 }
-const sortKeys = (o: unknown): unknown => (o && typeof o === 'object' ? Object.fromEntries(Object.entries(o as object).sort(([a], [b]) => a.localeCompare(b))) : o);
+
+const norm = (t: string): string => westernDigits(t).replace(/[​-‏‪-‮⁦-⁩﻿]/g, '');
+const near = (text: string, label: RegExp, value: string, span = 25): string | undefined => {
+  const after = text.match(new RegExp(`(?:${label.source})[^\\d\\n]{0,${span}}(${value})`, 'i'));
+  if (after) return after[1];
+  const before = text.match(new RegExp(`(${value})[^\\d\\n]{0,${span}}(?:${label.source})`, 'i'));
+  return before?.[1];
+};
+const word = (text: string, label: RegExp): string | undefined => {
+  const m = text.match(new RegExp(`(?:${label.source})\\s*[:：]?\\s*([^\\n\\d:：]{2,60})`, 'i'));
+  return m?.[1].trim();
+};
+
+/**
+ * Rule-based reading of text taken from a PDF (no AI). Layouts differ, so this is best effort: it returns only what it
+ * finds, every value is re-validated by sanitizeExtracted, and the owner and the reviewer still check the original.
+ */
+export function parseDocumentText(kind: DocKind, raw: string): Extracted {
+  const t = norm(raw);
+  if (kind === 'vat') return sanitizeExtracted('vat', { vatNumber: t.match(/(?<!\d)3\d{13}3(?!\d)/)?.[0] });
+  if (kind === 'cr') {
+    const cands = [...t.matchAll(/(?<!\d)[1-7]\d{9}(?!\d)/g)].map((m) => m[0]);
+    const kw = near(t, /السجل التجاري|رقم السجل|commercial registration|CR\s*(?:No|Number)?/, '[1-7]\\d{9}(?!\\d)', 40);
+    return sanitizeExtracted('cr', { crNumber: kw ?? (new Set(cands).size === 1 ? cands[0] : undefined) });
+  }
+  return sanitizeExtracted('address', {
+    buildingNo: near(t, /رقم المبنى|building\s*(?:no|number)?/, '\\d{4}(?!\\d)'),
+    additionalNo: near(t, /الرقم الإضافي|الرقم الاضافي|additional\s*(?:no|number)?/, '\\d{4}(?!\\d)'),
+    postalCode: near(t, /الرمز البريدي|الرمز البريدى|postal\s*code|zip/, '\\d{5}(?!\\d)'),
+    street: word(t, /اسم الشارع|الشارع|street(?:\s*name)?/),
+    district: word(t, /الحي|district|neighborhood/),
+    city: word(t, /المدينة|city/),
+  });
+}

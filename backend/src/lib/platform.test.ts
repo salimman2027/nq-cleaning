@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateCode, hashCode, isSaudiMobile, safeEqualHex, toInternational } from './otp';
 import { CR_RE, VAT_RE, missingForReview } from './company';
-import { mismatches, sanitizeExtracted, sniffMime, westernDigits } from './documents';
+import { mismatches, parseDocumentText, sanitizeExtracted, sniffMime, westernDigits } from './documents';
 import { extractFromFile } from '../services/extract';
 
 test('otp codes are 6 digits and hash is bound to phone, purpose and secret', () => {
@@ -51,6 +51,19 @@ test('converts Arabic digits and validates extracted values like manual entry', 
   const a = sanitizeExtracted('address', { nationalAddress: { buildingNo: '1234', street: 'King Fahd', district: 'Olaya', city: 'Riyadh', postalCode: '12211', additionalNo: '5678' } });
   assert.equal(a.nationalAddress?.postalCode, '12211');
   assert.deepEqual(sanitizeExtracted('address', { nationalAddress: { buildingNo: '12' } }), {});
+  assert.deepEqual(sanitizeExtracted('address', { nationalAddress: { buildingNo: '1234', postalCode: '12' } }), { nationalAddress: { buildingNo: '1234' } });
+});
+test('reads numbers from PDF text with Arabic digits, either label order, and ignores unrelated numbers', () => {
+  assert.deepEqual(parseDocumentText('cr', 'وزارة التجارة\nرقم السجل التجاري: ١٠١٠١٢٣٤٥٦\nهاتف 0551234567'), { crNumber: '1010123456' });
+  assert.deepEqual(parseDocumentText('cr', '1010123456 :السجل التجاري'), { crNumber: '1010123456' });
+  assert.deepEqual(parseDocumentText('cr', 'no registration here 12345'), {});
+  assert.deepEqual(parseDocumentText('vat', 'الرقم الضريبي ٣٠٠٠٠٠٠٠٠٠٠٠٠٠٣'), { vatNumber: '300000000000003' });
+  assert.deepEqual(parseDocumentText('vat', 'VAT 400000000000003'), {});
+  const a = parseDocumentText('address', 'رقم المبنى: 1234\nالرقم الإضافي: 5678\nالرمز البريدي: 12211\nالشارع: طريق الملك فهد\nالحي: العليا\nالمدينة: الرياض');
+  assert.equal(a.nationalAddress?.buildingNo, '1234');
+  assert.equal(a.nationalAddress?.additionalNo, '5678');
+  assert.equal(a.nationalAddress?.postalCode, '12211');
+  assert.equal(a.nationalAddress?.city, 'الرياض');
 });
 test('flags mismatches between file values and typed values', () => {
   assert.deepEqual(mismatches({ crNumber: '1010123456' }, { crNumber: '1010123457' }), ['crNumber']);

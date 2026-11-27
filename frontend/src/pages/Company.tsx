@@ -10,12 +10,15 @@ interface Profile {
   name: string; slug: string; logoUrl: string | null; coverUrl: string | null; primaryColor: string | null; status: string; description: string | null; crNumber: string | null; vatNumber: string | null;
   nationalAddress: Addr | null; documents: Doc[]; extractionEnabled: boolean; reviewNote: string | null; sectorCodes: string[]; missing: string[];
 }
-interface Doc { kind: 'cr' | 'vat' | 'address'; fileName: string; mimeType: string; extracted: { crNumber?: string; vatNumber?: string; nationalAddress?: Addr } | null; mismatch: string[] }
+interface Doc { kind: 'cr' | 'vat' | 'address'; fileName: string; mimeType: string; extracted: { crNumber?: string; vatNumber?: string; nationalAddress?: Partial<Addr> } | null; mismatch: string[] }
 const KINDS = ['cr', 'vat', 'address'] as const;
 const EMPTY: Addr = { buildingNo: '', street: '', district: '', city: '', postalCode: '', additionalNo: '' };
 
+const MISSING: Record<string, Key> = { name: 'companyName', crNumber: 'cr', vatNumber: 'vat', nationalAddress: 'natAddr', sectors: 'sectors', 'doc:cr': 'doc_cr', 'doc:vat': 'doc_vat', 'doc:address': 'doc_address' };
+
 export default function Company() {
   const { t } = useI18n();
+  const lab = (ks: string[]) => ks.map((k) => (MISSING[k] ? t(MISSING[k]) : k)).join('، ');
   const { reload } = useAuth();
   const [p, setP] = useState<Profile | null>(null);
   const [form, setForm] = useState({ name: '', slug: '', description: '', logoUrl: '', coverUrl: '', primaryColor: '', crNumber: '', vatNumber: '', addr: EMPTY });
@@ -36,7 +39,7 @@ export default function Company() {
 
   const act = async (fn: () => Promise<Profile>) => {
     setBusy(true); setError(''); setMsg('');
-    try { apply(await fn()); await reload(); setMsg(t('saved')); } catch (e) { setError(e instanceof ApiError ? `${e.message}${Array.isArray((e.details as { missing?: string[] })?.missing) ? ': ' + (e.details as { missing: string[] }).missing.join(', ') : ''}` : 'Error'); } finally { setBusy(false); }
+    try { apply(await fn()); await reload(); setMsg(t('saved')); } catch (e) { setError(e instanceof ApiError ? `${e.message}${Array.isArray((e.details as { missing?: string[] })?.missing) ? ': ' + lab((e.details as { missing: string[] }).missing) : ''}` : 'Error'); } finally { setBusy(false); }
   };
   const save = () => act(() => api<Profile>('/company', { method: 'PUT', body: {
     name: form.name, slug: form.slug, description: form.description || null, logoUrl: form.logoUrl.trim() || null, coverUrl: form.coverUrl.trim() || null, primaryColor: form.primaryColor || null,
@@ -51,7 +54,7 @@ export default function Company() {
   const useExtracted = (d: Doc) => {
     const x = d.extracted;
     if (!x) return;
-    setForm((f) => ({ ...f, crNumber: x.crNumber ?? f.crNumber, vatNumber: x.vatNumber ?? f.vatNumber, addr: x.nationalAddress ?? f.addr }));
+    setForm((f) => ({ ...f, crNumber: x.crNumber ?? f.crNumber, vatNumber: x.vatNumber ?? f.vatNumber, addr: { ...f.addr, ...(x.nationalAddress ?? {}) } }));
   };
   const docsOpen = p.status === 'draft' || p.status === 'rejected';
   const setA = (k: keyof Addr) => (e: ChangeEvent<HTMLInputElement>) => setForm({ ...form, addr: { ...form.addr, [k]: e.target.value } });
@@ -64,7 +67,7 @@ export default function Company() {
       </div>
       {p.status === 'pending_review' && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">{t('pendingNote')}</p>}
       {p.status === 'rejected' && p.reviewNote && <ErrorBox message={`${t('rejectionReason')}: ${p.reviewNote}`} />}
-      {p.status === 'draft' && p.missing.length > 0 && <p className="text-sm text-slate-500">{t('missingFields')}: {p.missing.join(', ')}</p>}
+      {p.status === 'draft' && p.missing.length > 0 && <p className="text-sm text-slate-500">{t('missingFields')}: {lab(p.missing)}</p>}
       {locked && <p className="text-xs text-slate-500">{t('lockedNote')}</p>}
       {error && <ErrorBox message={error} />}
       {msg && <p className="text-sm text-green-700">{msg}</p>}

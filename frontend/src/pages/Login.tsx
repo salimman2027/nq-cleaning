@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
-import { Button, ErrorBox, Field, Input } from '../ui';
+import { Button, ErrorBox, Field, Input, PasswordInput } from '../ui';
 
 export default function Login() {
   const { login } = useAuth();
@@ -57,7 +57,7 @@ export default function Login() {
         {mode === 'email' ? (
           <>
             <Field label={t('email')}><Input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
-            <Field label={t('password')}><Input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
+            <Field label={t('password')}><PasswordInput autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
           </>
         ) : (
           <>
