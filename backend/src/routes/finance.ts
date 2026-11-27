@@ -82,6 +82,50 @@ financeRouter.get('/reports/profit', requirePerm('finance.view_cost'), h(async (
   });
 }));
 
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+/** Key indicators and the management summary for a period (default: this month to today). Computed from stored data only. */
+financeRouter.get('/reports/overview', requirePerm('finance.view_cost'), h(async (req, res) => {
+  const q = parse(z.object({ from: dateSchema.default(`${riyadhToday().slice(0, 7)}-01`), to: dateSchema.default(riyadhToday()) }), req.query);
+  const p = { c: req.user!.companyId, f: q.from, t: q.to };
+  const r2 = (n: unknown) => Math.round(Number(n) * 100) / 100;
+  const reqs = (await query<Record<string, any>>(
+    `SELECT COUNT(*) AS Total, SUM(CASE WHEN Status='new' THEN 1 ELSE 0 END) AS New, SUM(CASE WHEN Status='confirmed' THEN 1 ELSE 0 END) AS Confirmed, SUM(CASE WHEN Status='cancelled' THEN 1 ELSE 0 END) AS Cancelled
+       FROM BookingRequests WHERE CompanyId=@c AND ${LOCAL('CreatedAt')} >= @f AND ${LOCAL('CreatedAt')} <= @t`, p))[0];
+  const bk = (await query<Record<string, any>>(
+    `SELECT COUNT(*) AS Total, SUM(CASE WHEN Status IN ${DONE} THEN 1 ELSE 0 END) AS Done, SUM(CASE WHEN Status='cancelled' THEN 1 ELSE 0 END) AS Cancelled,
+            ISNULL(SUM(CASE WHEN Status IN ${DONE} THEN Total - Vat ELSE 0 END),0) AS Net, ISNULL(SUM(CASE WHEN Status IN ${DONE} THEN Total ELSE 0 END),0) AS Gross,
+            ISNULL(SUM(CASE WHEN Status IN ${DONE} THEN Paid ELSE 0 END),0) AS Collected
+       FROM Bookings WHERE CompanyId=@c AND IsDeleted=0 AND ${LOCAL('StartAt')} >= @f AND ${LOCAL('StartAt')} <= @t`, p))[0];
+  const labor = (await query<{ Cost: number }>(
+    `SELECT ISNULL(SUM(DATEDIFF(MINUTE, a.StartAt, a.EndAt) / 60.0 * t.HourlyCost),0) AS Cost FROM BookingAssignments a JOIN Bookings b ON b.Id=a.BookingId JOIN Technicians t ON t.Id=a.TechnicianId
+      WHERE b.CompanyId=@c AND b.IsDeleted=0 AND a.IsActive=1 AND b.Status IN ${DONE} AND ${LOCAL('b.StartAt')} >= @f AND ${LOCAL('b.StartAt')} <= @t`, p))[0];
+  const exp = (await query<{ T: number }>(`SELECT ISNULL(SUM(Amount),0) AS T FROM Expenses WHERE CompanyId=@c AND IsDeleted=0 AND ExpenseDate>=@f AND ExpenseDate<=@t`, p))[0];
+  const rate = (await query<{ Avg: number | null; N: number }>(
+    `SELECT AVG(CAST(r.Stars AS FLOAT)) AS Avg, COUNT(*) AS N FROM Ratings r WHERE r.CompanyId=@c AND r.Stars IS NOT NULL AND ${LOCAL('r.SubmittedAt')} >= @f AND ${LOCAL('r.SubmittedAt')} <= @t`, p))[0];
+  const comp = (await query<{ Open: number }>(`SELECT COUNT(*) AS Open FROM Complaints WHERE CompanyId=@c AND Status<>'resolved'`, { c: p.c }))[0];
+  const byService = await query<Record<string, any>>(
+    `SELECT s.Name, COUNT(DISTINCT b.Id) AS Orders, ISNULL(SUM(d.LineTotal),0) AS Revenue FROM BookingDetails d JOIN Bookings b ON b.Id=d.BookingId JOIN Services s ON s.Id=d.ServiceId
+      WHERE b.CompanyId=@c AND b.IsDeleted=0 AND b.Status IN ${DONE} AND ${LOCAL('b.StartAt')} >= @f AND ${LOCAL('b.StartAt')} <= @t GROUP BY s.Name ORDER BY SUM(d.LineTotal) DESC`, p);
+  const bySup = await query<Record<string, any>>(
+    `SELECT s.Id, s.FullName, COUNT(b.Id) AS Orders, ISNULL(SUM(b.Total - b.Vat),0) AS Revenue,
+            (SELECT AVG(CAST(r.Stars AS FLOAT)) FROM Ratings r JOIN Bookings bb ON bb.Id=r.BookingId WHERE bb.SupervisorId=s.Id AND r.Stars IS NOT NULL AND ${LOCAL('bb.StartAt')} >= @f AND ${LOCAL('bb.StartAt')} <= @t) AS AvgRating
+       FROM Supervisors s LEFT JOIN Bookings b ON b.SupervisorId=s.Id AND b.CompanyId=@c AND b.IsDeleted=0 AND b.Status IN ${DONE} AND ${LOCAL('b.StartAt')} >= @f AND ${LOCAL('b.StartAt')} <= @t
+      WHERE s.CompanyId=@c AND s.IsDeleted=0 GROUP BY s.Id, s.FullName ORDER BY COUNT(b.Id) DESC, s.FullName`, p);
+  const requests = Number(reqs.Total), confirmed = Number(reqs.Confirmed), bookings = Number(bk.Total), done = Number(bk.Done), cancelled = Number(bk.Cancelled);
+  const net = Number(bk.Net), laborCost = r2(labor.Cost), expenses = r2(exp.T);
+  res.json({
+    from: q.from, to: q.to,
+    requests: { total: requests, new: Number(reqs.New), confirmed, cancelled: Number(reqs.Cancelled), conversionPct: requests ? r2((confirmed / requests) * 100) : null },
+    bookings: { total: bookings, done, cancelled, cancelPct: bookings ? r2((cancelled / bookings) * 100) : null },
+    money: { net: r2(net), gross: r2(bk.Gross), collected: r2(bk.Collected), outstanding: r2(Number(bk.Gross) - Number(bk.Collected)), laborCost, expenses, profit: r2(net - laborCost - expenses) },
+    rating: { average: rate.Avg == null ? null : r2(rate.Avg), count: Number(rate.N) },
+    openComplaints: Number(comp.Open),
+    byService: byService.map((s) => ({ name: s.Name, orders: Number(s.Orders), revenue: r2(s.Revenue) })),
+    bySupervisor: bySup.map((s) => ({ id: s.Id, name: s.FullName, orders: Number(s.Orders), revenue: r2(s.Revenue), avgRating: s.AvgRating == null ? null : r2(s.AvgRating) })),
+    notes: ['dates use Riyadh time', 'revenue counts finished bookings only', 'technician cost = scheduled hours x hourly cost', 'on-time rate is not tracked yet'],
+  });
+}));
+
 /** Orders and hours per supervisor and per technician, with overtime above a standard working day. */
 financeRouter.get('/reports/staff', requirePerm('finance.view_cost'), h(async (req, res) => {
   const q = parse(z.object({

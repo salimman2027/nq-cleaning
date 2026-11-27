@@ -266,6 +266,16 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).get('/api/market/config')).body.paymentMethods.filter((p: { enabled: boolean }) => p.enabled).length, 1, 'only cash is enabled');
   });
 
+  test('overview report returns indicators, per-service and per-supervisor rows', async () => {
+    const r = await request(app).get('/api/finance/reports/overview').set(auth(ownerToken));
+    assert.equal(r.status, 200);
+    for (const k of ['requests', 'bookings', 'money', 'rating', 'byService', 'bySupervisor']) assert.ok(k in r.body, k);
+    assert.equal(typeof r.body.money.profit, 'number');
+    assert.ok(Array.isArray(r.body.bySupervisor));
+    assert.equal((await request(app).get('/api/finance/reports/overview?from=bad').set(auth(ownerToken))).status, 400);
+    assert.equal((await request(app).get('/api/finance/reports/overview')).status, 401);
+  });
+
   test('platform monitor counts activity per period; complaints reach the platform only', async () => {
     for (const period of ['day', 'week', 'month']) {
       const m = await request(app).get(`/api/platform/monitor?period=${period}`).set(auth(platToken));

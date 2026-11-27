@@ -26,6 +26,7 @@ import StaffReport from './pages/StaffReport';
 import Review from './pages/Review';
 import Settings from './pages/Settings';
 import Ratings from './pages/Ratings';
+import Reports from './pages/Reports';
 import Rate from './pages/Rate';
 
 const NAV: { to: string; key: Key; perm: string; icon: string }[] = [
@@ -41,6 +42,7 @@ const NAV: { to: string; key: Key; perm: string; icon: string }[] = [
   { to: '/app/technicians', key: 'technicians', perm: 'technicians.view', icon: '🧹' },
   { to: '/app/supervisors', key: 'supervisors', perm: 'technicians.view', icon: '🧑‍💼' },
   { to: '/app/staff-report', key: 'staffReport', perm: 'finance.view_cost', icon: '📈' },
+  { to: '/app/reports', key: 'reportsTitle', perm: 'finance.view_cost', icon: '📑' },
   { to: '/app/ratings', key: 'ratingsTitle', perm: 'bookings.view', icon: '⭐' },
   { to: '/app/finance', key: 'finance', perm: 'finance.view_cost', icon: '💰' },
   { to: '/app/categories', key: 'categories', perm: 'services.view', icon: '🗂' },
@@ -128,6 +130,7 @@ export default function App() {
         <Route path="bookings" element={<Bookings />} />
         <Route path="customers" element={<Customers />} />
         <Route path="supervisors" element={<Supervisors />} />
+        <Route path="reports" element={<Reports />} />
         <Route path="ratings" element={<Ratings />} />
         <Route path="finance" element={<Finance />} />
         <Route path="staff-report" element={<StaffReport />} />
