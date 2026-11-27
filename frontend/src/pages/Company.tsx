@@ -1,3 +1,4 @@
+import AreasSection from './AreasSection';
 import type { ChangeEvent } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, fileToBase64, openFile } from '../api';
@@ -15,7 +16,7 @@ const KINDS = ['cr', 'vat', 'address'] as const;
 const EMPTY: Addr = { buildingNo: '', street: '', district: '', city: '', postalCode: '', additionalNo: '' };
 
 const dictKeys: Record<string, true> = Object.fromEntries(['INCOMPLETE', 'COMPANY_LOCKED', 'LEGAL_FIELDS_LOCKED', 'CR_TAKEN', 'FILE_TOO_LARGE', 'UNSUPPORTED_FILE', 'VALIDATION_ERROR', 'BAD_STATE', 'EMPTY_FILE'].map((c) => [`err_${c}`, true]));
-const MISSING: Record<string, Key> = { name: 'companyName', crNumber: 'cr', vatNumber: 'vat', nationalAddress: 'natAddr', sectors: 'sectors', 'doc:cr': 'doc_cr', 'doc:vat': 'doc_vat', 'doc:address': 'doc_address' };
+const MISSING: Record<string, Key> = { name: 'companyName', crNumber: 'cr', vatNumber: 'vat', nationalAddress: 'natAddr', sectors: 'sectors', areas: 'serviceAreas', 'doc:cr': 'doc_cr', 'doc:vat': 'doc_vat', 'doc:address': 'doc_address' };
 
 export default function Company() {
   const { t } = useI18n();
@@ -90,6 +91,7 @@ export default function Company() {
       {locked && <p className="text-xs text-slate-500">{t('lockedNote')}</p>}
       {error && <ErrorBox message={error} />}
       {msg && <p className="text-sm text-green-700">{msg}</p>}
+      <AreasSection canEdit={editable} onSaved={() => { api<Profile>('/company').then(apply).catch(() => undefined); }} />
       <section className="space-y-3 rounded-2xl bg-white p-4 shadow dark:bg-slate-900">
         <div><h2 className="font-semibold">{t('docs')}</h2><p className="text-xs text-slate-500">{t('docsHint')}</p></div>
         {KINDS.map((k) => {

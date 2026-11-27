@@ -5,6 +5,9 @@ import { query } from '../db';
 import { HttpError, h, parse } from '../errors';
 import rateLimit from 'express-rate-limit';
 import { optionalCustomerId } from './shop';
+import { checkArea } from '../services/areas';
+import { loadAreas } from './company';
+import { CITIES, DISTRICT_SUGGESTIONS } from '../lib/areas';
 import { isSaudiMobile } from '../lib/otp';
 
 /** Public, read-only marketplace endpoints. Only approved companies are ever visible. */
@@ -55,7 +58,8 @@ marketRouter.get('/companies/:slug', h(async (req, res) => {
   );
   const sectors = await query(`SELECT s.Code, s.NameAr, s.NameEn FROM CompanySectors cs JOIN Sectors s ON s.Id=cs.SectorId WHERE cs.CompanyId=@c`, { c: c.Id });
   const categories = await query(`SELECT Name, ImageUrl FROM ServiceCategories WHERE CompanyId=@c AND ImageUrl IS NOT NULL ORDER BY SortOrder, Id`, { c: c.Id });
-  res.json({ categories, slug: c.Slug, name: c.Name, description: c.Description, logoUrl: c.LogoUrl, coverUrl: c.CoverUrl, whatsapp: c.WhatsApp ? '966' + String(c.WhatsApp).slice(1) : null, primaryColor: c.PrimaryColor, sectors, services });
+  const areas = await loadAreas(c.Id);
+  res.json({ areas, categories, slug: c.Slug, name: c.Name, description: c.Description, logoUrl: c.LogoUrl, coverUrl: c.CoverUrl, whatsapp: c.WhatsApp ? '966' + String(c.WhatsApp).slice(1) : null, primaryColor: c.PrimaryColor, sectors, services });
 }));
 
 const requestLimiter = rateLimit({ windowMs: 10 * 60_000, limit: 8, standardHeaders: true, legacyHeaders: false, skip: () => config.env === 'test' });
@@ -68,6 +72,8 @@ marketRouter.post('/companies/:slug/requests', requestLimiter, h(async (req, res
     serviceId: z.number().int().positive(),
     customerName: z.string().trim().min(2).max(120),
     phone: z.string().trim().refine(isSaudiMobile, 'Saudi mobile (05XXXXXXXX)'),
+    city: z.string().trim().max(60).optional(),
+    district: z.string().trim().max(80).optional(),
     address: z.string().trim().max(300).optional(),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     period: z.enum(['morning', 'afternoon', 'evening']),
@@ -80,10 +86,11 @@ marketRouter.post('/companies/:slug/requests', requestLimiter, h(async (req, res
   if (!c) throw new HttpError(404, 'NOT_FOUND', 'Company not found');
   const svc = await query(`SELECT 1 AS x FROM Services WHERE Id=@i AND CompanyId=@c AND IsActive=1 AND IsDeleted=0`, { i: b.serviceId, c: c.Id });
   if (!svc.length) throw new HttpError(400, 'BAD_SERVICE', 'Unknown service');
+  const area = await checkArea(c.Id, b.city, b.district);
   const r = await query<{ Id: number }>(
-    `INSERT INTO BookingRequests (CompanyId, ServiceId, CustomerName, Phone, Address, PreferredDate, PreferredPeriod, Notes, CustomerId)
-     OUTPUT inserted.Id VALUES (@c,@s,@n,@p,@a,@d,@pe,@no,@cu)`,
-    { c: c.Id, s: b.serviceId, n: b.customerName, p: b.phone, a: b.address ?? null, d: b.date, pe: b.period, no: b.notes ?? null, cu: optionalCustomerId(req) },
+    `INSERT INTO BookingRequests (CompanyId, ServiceId, CustomerName, Phone, Address, PreferredDate, PreferredPeriod, Notes, CustomerId, City, District)
+     OUTPUT inserted.Id VALUES (@c,@s,@n,@p,@a,@d,@pe,@no,@cu,@ci,@di)`,
+    { ci: area.city, di: area.district, c: c.Id, s: b.serviceId, n: b.customerName, p: b.phone, a: b.address ?? null, d: b.date, pe: b.period, no: b.notes ?? null, cu: optionalCustomerId(req) },
   );
   res.status(201).json({ id: r[0].Id, status: 'new' });
 }));
@@ -102,6 +109,9 @@ marketRouter.post('/companies/:slug/complaints', complaintLimiter, h(async (req,
   const r = await query<{ Id: number }>(`INSERT INTO Complaints (CompanyId, CustomerName, Phone, Message) OUTPUT inserted.Id VALUES (@c,@n,@p,@m)`, { c: c.Id, n: b.customerName, p: b.phone, m: b.message });
   res.status(201).json({ id: r[0].Id });
 }));
+
+/** Cities and suggested districts for the area pickers. */
+marketRouter.get('/areas-catalog', (_req, res) => { res.json({ cities: CITIES, districts: DISTRICT_SUGGESTIONS }); });
 
 marketRouter.get('/brand', h(async (_req, res) => {
   const r = await query<{ Value: string }>(`SELECT s.Value FROM SystemSettings s JOIN Companies c ON c.Id=s.CompanyId WHERE c.IsPlatform=1 AND s.[Key]='brand.logoUrl'`);

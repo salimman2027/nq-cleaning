@@ -8,6 +8,7 @@ import { query, withTx, money } from '../db';
 import { HttpError, h, parse } from '../errors';
 import { isSaudiMobile } from '../lib/otp';
 import { normalizeMobile } from '../lib/phone';
+import { checkArea } from '../services/areas';
 
 /**
  * Marketplace customer accounts and orders. A customer token is signed with a different secret than staff tokens, so it can
@@ -68,6 +69,8 @@ const orderSchema = z.object({
   items: z.array(z.object({ serviceId: z.number().int().positive(), qty: z.number().int().min(1).max(1000) })).min(1).max(30),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   period: z.enum(['morning', 'afternoon', 'evening']),
+  city: z.string().trim().max(60).optional(),
+  district: z.string().trim().max(80).optional(),
   address: z.string().trim().min(3).max(300),
   notes: z.string().trim().max(500).optional(),
   paymentMethod: z.enum(['cash', 'card']),
@@ -81,6 +84,7 @@ shopRouter.post('/orders', customerAuth, h(async (req, res) => {
   if (b.date < today || b.date > max) throw new HttpError(400, 'BAD_DATE', 'Choose a date within the next 90 days');
   const co = (await query<{ Id: number }>(`SELECT Id FROM Companies WHERE Slug=@s AND Status='approved' AND IsDeleted=0 AND IsPlatform=0`, { s: b.slug }))[0];
   if (!co) throw new HttpError(404, 'NOT_FOUND', 'Company not found');
+  const area = await checkArea(co.Id, b.city, b.district);
   const cu = (await query<{ Name: string; Phone: string }>(`SELECT Name, Phone FROM MarketplaceCustomers WHERE Id=@i AND IsDeleted=0`, { i: req.customerId }))[0];
   if (!cu) throw new HttpError(401, 'INVALID_TOKEN', 'Account not found');
   const lines: { serviceId: number; name: string; price: number; qty: number }[] = [];
@@ -98,9 +102,9 @@ shopRouter.post('/orders', customerAuth, h(async (req, res) => {
   const total = Math.round(lines.reduce((a, l) => a + l.price * l.qty, 0) * 100) / 100;
   const id = await withTx(async (tx) => {
     const r = await query<{ Id: number }>(
-      `INSERT INTO BookingRequests (CompanyId, ServiceId, CustomerName, Phone, Address, PreferredDate, PreferredPeriod, Notes, CustomerId, PaymentMethod, Total)
-       OUTPUT inserted.Id VALUES (@c,@s,@n,@p,@a,@d,@pe,@no,@cu,'cash',@t)`,
-      { c: co.Id, s: lines[0].serviceId, n: cu.Name, p: cu.Phone, a: b.address, d: b.date, pe: b.period, no: b.notes ?? null, cu: req.customerId, t: money(total) }, tx);
+      `INSERT INTO BookingRequests (CompanyId, ServiceId, CustomerName, Phone, Address, PreferredDate, PreferredPeriod, Notes, CustomerId, PaymentMethod, Total, City, District)
+       OUTPUT inserted.Id VALUES (@c,@s,@n,@p,@a,@d,@pe,@no,@cu,'cash',@t,@ci,@di)`,
+      { ci: area.city, di: area.district, c: co.Id, s: lines[0].serviceId, n: cu.Name, p: cu.Phone, a: b.address, d: b.date, pe: b.period, no: b.notes ?? null, cu: req.customerId, t: money(total) }, tx);
     for (const l of lines) await query(`INSERT INTO BookingRequestItems (RequestId, ServiceId, Name, UnitPrice, Qty) VALUES (@r,@s,@n,@u,@q)`, { r: r[0].Id, s: l.serviceId, n: l.name, u: money(l.price), q: l.qty }, tx);
     return Number(r[0].Id);
   });
@@ -109,7 +113,7 @@ shopRouter.post('/orders', customerAuth, h(async (req, res) => {
 
 shopRouter.get('/orders', customerAuth, h(async (req, res) => {
   const rows = await query<Record<string, any>>(
-    `SELECT r.Id, r.Status, r.PaymentMethod, r.PaymentStatus, r.Total, r.PreferredDate, r.PreferredPeriod, r.Address, r.CreatedAt, c.Name AS CompanyName, c.Slug,
+    `SELECT r.Id, r.Status, r.PaymentMethod, r.PaymentStatus, r.Total, r.PreferredDate, r.PreferredPeriod, r.Address, r.City, r.District, r.CreatedAt, c.Name AS CompanyName, c.Slug,
             CASE WHEN r.Status IN ('contacted','confirmed','cancelled') AND ISNULL(r.CustomerSeenStatus,'new')<>r.Status THEN 1 ELSE 0 END AS Unseen
        FROM BookingRequests r JOIN Companies c ON c.Id=r.CompanyId WHERE r.CustomerId=@i ORDER BY r.CreatedAt DESC`, { i: req.customerId });
   const items = rows.length ? await query<Record<string, any>>(`SELECT RequestId, Name, UnitPrice, Qty FROM BookingRequestItems WHERE RequestId IN (SELECT Id FROM BookingRequests WHERE CustomerId=@i)`, { i: req.customerId }) : [];

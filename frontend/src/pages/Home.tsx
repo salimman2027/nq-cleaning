@@ -31,6 +31,7 @@ export function PublicShell({ children, flush = false }: { children: ReactNode; 
           </Link>
           <nav className="flex items-center gap-2 text-sm">
             {!me && !customer && <Link to="/join" className="hidden rounded-lg px-3 py-2 text-white/85 hover:bg-white/10 sm:block">{t('joinAsCompany')}</Link>}
+            {customer && !me && <Link to="/account" className="rounded-lg bg-white px-4 py-2 font-medium text-cyan-900 hover:bg-cyan-50">{t('myOrdersLink')}</Link>}
             {me && <Link to="/app" className="rounded-lg bg-white px-4 py-2 font-medium text-cyan-900 hover:bg-cyan-50">{t('company')}</Link>}
             {!me && !customer && <Link to="/login" className="rounded-lg bg-white px-4 py-2 font-medium text-cyan-900 hover:bg-cyan-50">{t('companyLogin')}</Link>}
             {customer && (customer.unseen ?? 0) > 0 && (

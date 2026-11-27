@@ -15,7 +15,7 @@ requestsRouter.get(
   h(async (req, res) => {
     await backfillConfirmed(req.user!.companyId, req.user!.id);
     const items = await query(
-      `SELECT r.Id, r.PaymentMethod, r.PaymentStatus, r.Total, r.CustomerName, r.Phone, r.Address, r.PreferredDate, r.PreferredPeriod, r.Notes, r.Status, r.CreatedAt, s.Name AS ServiceName
+      `SELECT r.Id, r.PaymentMethod, r.PaymentStatus, r.Total, r.CustomerName, r.Phone, r.Address, r.City, r.District, r.PreferredDate, r.PreferredPeriod, r.Notes, r.Status, r.CreatedAt, s.Name AS ServiceName
          FROM BookingRequests r JOIN Services s ON s.Id=r.ServiceId
         WHERE r.CompanyId=@c ORDER BY CASE r.Status WHEN 'new' THEN 0 ELSE 1 END, r.CreatedAt DESC`,
       { c: req.user!.companyId },

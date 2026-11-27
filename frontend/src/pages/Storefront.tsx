@@ -6,9 +6,11 @@ import { SectorIcon } from '../sectorIcons';
 import { ErrorBox, Modal, money, Skeleton } from '../ui';
 import { useShop } from '../shop';
 import ComplaintForm from './ComplaintForm';
+import { AreaSelect, type ServiceArea } from '../AreaSelect';
 import { PublicShell } from './Home';
 
 interface Store {
+  areas?: ServiceArea[];
   slug: string; name: string; description: string | null; logoUrl: string | null; coverUrl?: string | null; whatsapp?: string | null; categories?: { Name: string; ImageUrl: string }[]; primaryColor: string | null;
   sectors: { Code: string; NameAr: string; NameEn: string }[];
   services: { Id: number; Name: string; DefaultMinutes: number; FromPrice: number | null; ImageUrl: string | null; Category: string | null; Description: string | null; Includes: string | null; Notes: string | null }[];
@@ -17,7 +19,7 @@ interface Store {
 function RequestForm({ store, color, picked }: { store: Store; color: string; picked: string }) {
   const { t } = useI18n();
   const { customer } = useShop();
-  const [f, setF] = useState({ serviceId: picked, customerName: customer?.name ?? '', phone: customer?.phone ?? '', address: '', date: '', period: 'morning', notes: '' });
+  const [f, setF] = useState({ serviceId: picked, customerName: customer?.name ?? '', phone: customer?.phone ?? '', address: '', date: '', period: 'morning', notes: '', city: '', district: '' });
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
@@ -27,7 +29,7 @@ function RequestForm({ store, color, picked }: { store: Store; color: string; pi
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setError('');
     try {
-      await api(`/market/companies/${store.slug}/requests`, { method: 'POST', customer: !!customer, body: { serviceId: Number(f.serviceId), customerName: f.customerName, phone: f.phone, address: f.address || undefined, date: f.date, period: f.period, notes: f.notes || undefined } });
+      await api(`/market/companies/${store.slug}/requests`, { method: 'POST', customer: !!customer, body: { serviceId: Number(f.serviceId), customerName: f.customerName, phone: f.phone, city: f.city || undefined, district: f.district || undefined, address: f.address || undefined, date: f.date, period: f.period, notes: f.notes || undefined } });
       setDone(true);
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Error'); } finally { setBusy(false); }
   };
@@ -44,6 +46,7 @@ function RequestForm({ store, color, picked }: { store: Store; color: string; pi
         <input required type="date" min={today} className={cls} value={f.date} onChange={set('date')} aria-label={t('prefDate')} />
         <select className={cls} value={f.period} onChange={set('period')} aria-label={t('period')}>{['morning', 'afternoon', 'evening'].map((p) => <option key={p} value={p}>{t(`p_${p}` as Key)}</option>)}</select>
       </div>
+      <AreaSelect areas={store.areas} city={f.city} district={f.district} onChange={(city, district) => setF({ ...f, city, district })} className={cls} />
       <input className={cls} placeholder={t('addressOpt')} value={f.address} onChange={set('address')} />
       <input className={cls} placeholder={t('notesOpt')} value={f.notes} onChange={set('notes')} />
       <button disabled={busy} className="tile w-full rounded-xl px-4 py-3 font-semibold text-white disabled:opacity-60" style={{ background: color }}>{t('sendRequest')}</button>
@@ -113,6 +116,7 @@ export default function Storefront() {
                   <span className="text-2xl font-bold leading-tight sm:text-3xl">{s.name}</span>
                 </div>
                 <h1 className="mt-4 text-3xl font-bold leading-[1.3] sm:text-5xl sm:leading-[1.25]">{t('storeHeadline1')}<br /><span style={{ color }}>{t('storeHeadline2')}</span></h1>
+                {s.areas && s.areas.length > 0 && <p className="mt-3 text-sm font-medium text-slate-600 dark:text-slate-300">{t('weServe')}: {s.areas.map((a) => a.city).join('، ')}</p>}
                 {s.description && <p className="mt-4 max-w-md text-slate-600 dark:text-slate-300">{s.description}</p>}
                 <div className="mt-5 flex flex-wrap gap-2">
                   {s.sectors.map((x) => <span key={x.Code} className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-sm shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" style={{ color }}><SectorIcon code={x.Code} className="h-4 w-4" />{lang === 'ar' ? x.NameAr : x.NameEn}</span>)}

@@ -10,7 +10,7 @@ const START_HOUR: Record<string, number> = { morning: 9, afternoon: 13, evening:
 export async function bookFromRequest(companyId: number, requestId: number, userId: number | null): Promise<number | null> {
   return withTx(async (tx) => {
     const r = (await query<Record<string, any>>(
-      `SELECT r.Id, r.ServiceId, r.CustomerName, r.Phone, r.Address, r.PreferredDate, r.PreferredPeriod, r.Notes, r.Total, r.BookingId, s.DefaultMinutes
+      `SELECT r.Id, r.ServiceId, r.CustomerName, r.Phone, r.Address, r.PreferredDate, r.PreferredPeriod, r.Notes, r.Total, r.BookingId, r.City, r.District, s.DefaultMinutes
          FROM BookingRequests r WITH (UPDLOCK) JOIN Services s ON s.Id=r.ServiceId WHERE r.Id=@i AND r.CompanyId=@c`, { i: requestId, c: companyId }, tx))[0];
     if (!r) return null;
     if (r.BookingId) return Number(r.BookingId);
@@ -24,8 +24,8 @@ export async function bookFromRequest(companyId: number, requestId: number, user
         { c: companyId, n: r.CustomerName, m: mobile, u: userId }, tx))[0];
     }
     const street = (r.Address as string | null) ?? '—';
-    let addr = (await query<{ Id: number }>(`SELECT TOP 1 Id FROM CustomerAddresses WHERE CustomerId=@c AND Street=@s AND IsDeleted=0`, { c: cust.Id, s: street }, tx))[0];
-    if (!addr) addr = (await query<{ Id: number }>(`INSERT INTO CustomerAddresses (CustomerId, Label, Street) OUTPUT INSERTED.Id VALUES (@c, N'من المتجر', @s)`, { c: cust.Id, s: street }, tx))[0];
+    let addr = (await query<{ Id: number }>(`SELECT TOP 1 Id FROM CustomerAddresses WHERE CustomerId=@c AND Street=@s AND ISNULL(City,'')=ISNULL(@ci,'') AND ISNULL(District,'')=ISNULL(@di,'') AND IsDeleted=0`, { c: cust.Id, s: street, ci: r.City ?? null, di: r.District ?? null }, tx))[0];
+    if (!addr) addr = (await query<{ Id: number }>(`INSERT INTO CustomerAddresses (CustomerId, Label, City, District, Street) OUTPUT INSERTED.Id VALUES (@c, N'من المتجر', @ci, @di, @s)`, { c: cust.Id, s: street, ci: r.City ?? null, di: r.District ?? null }, tx))[0];
 
     let branch = (await query<{ Id: number }>(`SELECT TOP 1 Id FROM Branches WHERE CompanyId=@c AND IsDeleted=0 ORDER BY Id`, { c: companyId }, tx))[0];
     if (!branch) branch = (await query<{ Id: number }>(`INSERT INTO Branches (CompanyId, Name) OUTPUT INSERTED.Id VALUES (@c, N'Main')`, { c: companyId }, tx))[0];

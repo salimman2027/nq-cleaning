@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useI18n, type Key } from '../i18n';
 import { useShop } from '../shop';
 import { Button, ErrorBox, money } from '../ui';
+import { AreaSelect, type ServiceArea } from '../AreaSelect';
 import { PublicShell } from './Home';
 
 export default function Cart() {
@@ -11,7 +12,9 @@ export default function Cart() {
   const { cart, customer, setQty, clear, total } = useShop();
   const nav = useNavigate();
   const today = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
-  const [f, setF] = useState({ date: '', period: 'morning', address: '', notes: '', pay: 'cash' });
+  const [f, setF] = useState({ date: '', period: 'morning', address: '', notes: '', pay: 'cash', city: '', district: '' });
+  const [areas, setAreas] = useState<ServiceArea[]>([]);
+  useEffect(() => { if (cart?.slug) api<{ areas?: ServiceArea[] }>(`/market/companies/${cart.slug}`).then((r) => setAreas(r.areas ?? [])).catch(() => undefined); }, [cart?.slug]);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<number | null>(null);
@@ -22,9 +25,9 @@ export default function Cart() {
     if (!cart) return;
     setBusy(true); setErr('');
     try {
-      const r = await api<{ id: number }>('/shop/orders', { method: 'POST', customer: true, body: { slug: cart.slug, items: cart.items.map((i) => ({ serviceId: i.serviceId, qty: i.qty })), date: f.date, period: f.period, address: f.address, notes: f.notes || undefined, paymentMethod: f.pay } });
+      const r = await api<{ id: number }>('/shop/orders', { method: 'POST', customer: true, body: { slug: cart.slug, items: cart.items.map((i) => ({ serviceId: i.serviceId, qty: i.qty })), date: f.date, period: f.period, city: f.city || undefined, district: f.district || undefined, address: f.address, notes: f.notes || undefined, paymentMethod: f.pay } });
       clear(); setDone(r.id);
-    } catch (ex) { setErr(ex instanceof ApiError ? (ex.code === 'BAD_SERVICE' ? t('cartStale') : ex.code === 'BAD_DATE' ? t('badDate') : t('err_VALIDATION_ERROR')) : 'Error'); } finally { setBusy(false); }
+    } catch (ex) { setErr(ex instanceof ApiError ? (ex.code === 'BAD_SERVICE' ? t('cartStale') : ex.code === 'BAD_DATE' ? t('badDate') : ex.code === 'OUT_OF_AREA' ? t('outOfArea') : t('err_VALIDATION_ERROR')) : 'Error'); } finally { setBusy(false); }
   };
 
   if (done) return (
@@ -61,6 +64,7 @@ export default function Cart() {
           {err && <ErrorBox message={err} />}
           <input required type="date" min={today} className={cls} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} aria-label={t('prefDate')} />
           <select className={cls} value={f.period} onChange={(e) => setF({ ...f, period: e.target.value })} aria-label={t('period')}>{['morning', 'afternoon', 'evening'].map((p) => <option key={p} value={p}>{t(`p_${p}` as Key)}</option>)}</select>
+          <AreaSelect areas={areas} city={f.city} district={f.district} onChange={(city, district) => setF({ ...f, city, district })} className={cls} />
           <input required minLength={3} className={cls} placeholder={t('addressReq')} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
           <input className={cls} placeholder={t('notesOpt')} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
           <fieldset className="space-y-2"><legend className="mb-1 text-sm font-medium">{t('payment')}</legend>

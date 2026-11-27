@@ -4,6 +4,7 @@ import { query, withTx } from '../db';
 import { HttpError, h, parse } from '../errors';
 import { requirePerm, invalidateCompanyStatus } from '../auth/middleware';
 import { CR_RE, SLUG_RE, imageRef, VAT_RE, missingForReview, nationalAddressSchema } from '../lib/company';
+import { isCity } from '../lib/areas';
 import { DOC_KINDS, MAX_DOC_BYTES, isCompleteAddress, mismatches, safeFileName, sniffMime, type DocKind, type Extracted } from '../lib/documents';
 import { extractFromFile, extractionEnabled } from '../services/extract';
 
@@ -40,6 +41,7 @@ async function loadProfile(companyId: number) {
   const sectors = await query<{ Code: string }>(`SELECT s.Code FROM CompanySectors cs JOIN Sectors s ON s.Id=cs.SectorId WHERE cs.CompanyId=@c`, { c: companyId });
   const address = c.NationalAddress ? JSON.parse(c.NationalAddress) : null;
   const documents = await listDocuments(companyId, { crNumber: c.CrNumber, vatNumber: c.VatNumber, nationalAddress: address });
+  const areaCount = (await query<{ N: number }>(`SELECT COUNT(DISTINCT City) AS N FROM CompanyAreas WHERE CompanyId=@c`, { c: companyId }))[0].N;
   const missingDocs = DOC_KINDS.filter((k) => !documents.some((d) => d.kind === k));
   return {
     documents, extractionEnabled: extractionEnabled(),
@@ -47,7 +49,7 @@ async function loadProfile(companyId: number) {
     primaryColor: c.PrimaryColor, crNumber: c.CrNumber, vatNumber: c.VatNumber, nationalAddress: address,
     submittedAt: c.SubmittedAt, reviewedAt: c.ReviewedAt, reviewNote: c.Status === 'rejected' || c.Status === 'suspended' ? c.ReviewNote : null,
     sectorCodes: sectors.map((s) => s.Code),
-    missing: [...missingForReview({ name: c.Name, crNumber: c.CrNumber, vatNumber: c.VatNumber, nationalAddress: address, sectorCount: sectors.length }), ...missingDocs.map((k) => `doc:${k}`)],
+    missing: [...missingForReview({ name: c.Name, crNumber: c.CrNumber, vatNumber: c.VatNumber, nationalAddress: address, sectorCount: sectors.length }), ...(areaCount ? [] : ['areas']), ...missingDocs.map((k) => `doc:${k}`)],
   };
 }
 
@@ -186,3 +188,29 @@ companyRouter.post(
     res.json(await loadProfile(cid));
   }),
 );
+
+/** Service areas: cities (and optionally districts inside them) this company works in. */
+export async function loadAreas(companyId: number): Promise<{ city: string; districts: string[] }[]> {
+  const rows = await query<{ City: string; District: string | null }>(`SELECT City, District FROM CompanyAreas WHERE CompanyId=@c ORDER BY City, District`, { c: companyId });
+  const map = new Map<string, string[]>();
+  for (const r of rows) { if (!map.has(r.City)) map.set(r.City, []); if (r.District) map.get(r.City)!.push(r.District); }
+  return [...map.entries()].map(([city, districts]) => ({ city, districts }));
+}
+
+companyRouter.get('/areas', h(async (req, res) => res.json({ areas: await loadAreas(req.user!.companyId) })));
+
+companyRouter.put('/areas', requirePerm('company.profile.manage'), h(async (req, res) => {
+  const { areas } = parse(z.object({ areas: z.array(z.object({ city: z.string().trim().max(60), districts: z.array(z.string().trim().min(2).max(80)).max(200) })).max(40) }), req.body);
+  for (const a of areas) if (!isCity(a.city)) throw new HttpError(400, 'UNKNOWN_CITY', `Unknown city: ${a.city}`);
+  const cur = (await query<{ Status: string }>(`SELECT Status FROM Companies WHERE Id=@c`, { c: req.user!.companyId }))[0];
+  if (cur?.Status === 'suspended') throw new HttpError(409, 'COMPANY_LOCKED', 'Company is suspended');
+  await withTx(async (tx) => {
+    await query(`DELETE FROM CompanyAreas WHERE CompanyId=@c`, { c: req.user!.companyId }, tx);
+    for (const a of areas) {
+      const ds = [...new Set(a.districts)];
+      if (ds.length === 0) await query(`INSERT INTO CompanyAreas (CompanyId, City, District) VALUES (@c,@y,NULL)`, { c: req.user!.companyId, y: a.city }, tx);
+      for (const d of ds) await query(`INSERT INTO CompanyAreas (CompanyId, City, District) VALUES (@c,@y,@d)`, { c: req.user!.companyId, y: a.city, d }, tx);
+    }
+  });
+  res.json({ areas: await loadAreas(req.user!.companyId) });
+}));

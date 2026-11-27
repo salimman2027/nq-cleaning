@@ -76,10 +76,12 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
   test('not visible in the public marketplace before approval; platform permission enforced', async () => {
     const put = await request(app).put('/api/company').set(auth(ownerToken)).send({ crNumber: '1010123456', vatNumber: '300000000000003', nationalAddress: ADDR, slug: 'clean-co' });
     assert.equal(put.status, 200);
-    // Documents are mandatory: without them the submit is refused.
+    // Areas and documents are mandatory: without them the submit is refused.
     const noDocs = await request(app).post('/api/company/submit').set(auth(ownerToken));
     assert.equal(noDocs.status, 409);
-    assert.deepEqual(noDocs.body.error.details.missing, ['doc:cr', 'doc:vat', 'doc:address']);
+    assert.deepEqual(noDocs.body.error.details.missing, ['areas', 'doc:cr', 'doc:vat', 'doc:address']);
+    assert.equal((await request(app).put('/api/company/areas').set(auth(ownerToken)).send({ areas: [{ city: 'Atlantis', districts: [] }] })).status, 400);
+    assert.equal((await request(app).put('/api/company/areas').set(auth(ownerToken)).send({ areas: [{ city: 'الرياض', districts: ['العليا', 'الملقا'] }, { city: 'جدة', districts: [] }] })).status, 200);
     const pdf = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF').toString('base64');
     const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]).toString('base64');
     assert.equal((await request(app).put('/api/company/documents/cr').set(auth(ownerToken)).send({ fileName: 'cr.pdf', dataBase64: pdf })).status, 200);
@@ -135,7 +137,10 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     const { query } = await import('../db');
     const svc = (await query<{ Id: number }>(`INSERT INTO Services (CompanyId, Name, PricingMethod, DefaultMinutes) OUTPUT INSERTED.Id VALUES (@c, N'Deep clean', 'fixed', 120)`, { c: companyId }))[0].Id;
     const day = new Date(Date.now() + 3 * 86400_000 + 3 * 3600_000).toISOString().slice(0, 10);
-    const ok = { serviceId: svc, customerName: 'Ahmed', phone: '0551112233', date: day, period: 'morning' };
+    const ok = { serviceId: svc, customerName: 'Ahmed', phone: '0551112233', date: day, period: 'morning', city: 'الرياض', district: 'العليا' };
+    assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, city: 'الدمام' })).status, 400, 'city outside the service areas');
+    assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, district: 'النرجس' })).status, 400, 'district outside the list');
+    assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, city: undefined })).status, 400, 'city is required once the company lists areas');
     assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send(ok)).status, 201);
     assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, phone: '12345' })).status, 400);
     assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, date: '2020-01-01' })).status, 400);
@@ -172,7 +177,8 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).post('/api/shop/login').send({ phone: '0561112233', password: 'wrong-pass-1' })).status, 401);
     assert.equal((await request(app).get('/api/shop/me').set(auth(ownerToken))).status, 401, 'staff token is not a customer token');
     assert.equal((await request(app).get('/api/customers').set(auth(tok))).status, 401, 'customer token is not a staff token');
-    const order = { slug: 'clean-co', items: [{ serviceId: svc, qty: 2 }], date: day, period: 'morning', address: 'Riyadh, Al Olaya', paymentMethod: 'cash' };
+    const order = { slug: 'clean-co', items: [{ serviceId: svc, qty: 2 }], date: day, period: 'morning', city: 'الرياض', district: 'العليا', address: 'Riyadh, Al Olaya', paymentMethod: 'cash' };
+    assert.equal((await request(app).post('/api/shop/orders').set(auth(tok)).send({ ...order, city: 'الدمام' })).status, 400, 'outside areas');
     assert.equal((await request(app).post('/api/shop/orders').send(order)).status, 401);
     assert.equal((await request(app).post('/api/shop/orders').set(auth(tok)).send({ ...order, paymentMethod: 'card' })).status, 400);
     const ok = await request(app).post('/api/shop/orders').set(auth(tok)).send(order);
@@ -191,7 +197,7 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).get('/api/shop/me').set(auth(tok))).body.unseen, 0);
     const co = await request(app).post(`/api/shop/orders/${ok.body.id}/complaints`).set(auth(tok)).send({ message: 'The team did not show up on time.' });
     assert.equal(co.status, 201);
-    const form = { serviceId: svc, customerName: 'Sara Ali', phone: '0561112233', date: day, period: 'evening' };
+    const form = { serviceId: svc, customerName: 'Sara Ali', phone: '0561112233', date: day, period: 'evening', city: 'الرياض', district: 'الملقا' };
     assert.equal((await request(app).post('/api/market/companies/clean-co/requests').set(auth(tok)).send(form)).status, 201);
     assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send(form)).status, 201, 'a visitor request is still accepted');
     const after = await request(app).get('/api/shop/orders').set(auth(tok));

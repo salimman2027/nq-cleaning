@@ -4,7 +4,7 @@ import { useAuth } from '../auth';
 import { useI18n, type Key } from '../i18n';
 import { Button, ErrorBox, money, Skeleton } from '../ui';
 
-interface Req { Id: number; CustomerName: string; Phone: string; Address: string | null; PreferredDate: string; PreferredPeriod: string; Notes: string | null; Status: string; ServiceName: string; Total: number | null; PaymentMethod: string; PaymentStatus: string; Items: { Name: string; Qty: number; UnitPrice: number }[] }
+interface Req { Id: number; CustomerName: string; Phone: string; Address: string | null; PreferredDate: string; PreferredPeriod: string; Notes: string | null; Status: string; City: string | null; District: string | null; ServiceName: string; Total: number | null; PaymentMethod: string; PaymentStatus: string; Items: { Name: string; Qty: number; UnitPrice: number }[] }
 
 export default function Requests() {
   const { t, lang } = useI18n();
@@ -31,7 +31,7 @@ export default function Requests() {
               {r.Items.length > 0 && <ul className="mt-1 text-sm">{r.Items.map((i, k) => <li key={k}>{i.Name} × {i.Qty} — {money(i.UnitPrice * i.Qty, lang)}</li>)}</ul>}
               {r.Total != null && <div className="mt-1 flex flex-wrap items-center gap-2 text-sm"><b>{t('total')}: {money(r.Total, lang)}</b><span className="text-slate-500">{t('cashLbl')} · {r.PaymentStatus === 'paid' ? t('paid') : t('unpaid')}</span>
                 {can('bookings.update') && r.PaymentStatus !== 'paid' && r.Status !== 'cancelled' && <Button variant="ghost" onClick={() => pay(r.Id, 'paid')}>{t('markPaid')}</Button>}</div>}
-              {(r.Address || r.Notes) && <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{[r.Address, r.Notes].filter(Boolean).join(' — ')}</p>}
+              {(r.City || r.Address || r.Notes) && <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{[[r.City, r.District].filter(Boolean).join(' / '), r.Address, r.Notes].filter(Boolean).join(' — ')}</p>}
               {can('bookings.update') && r.Status !== 'cancelled' && r.Status !== 'confirmed' && (
                 <div className="mt-2 flex gap-2">
                   {r.Status === 'new' && <Button variant="ghost" onClick={() => mark(r.Id, 'contacted')}>{t('markContacted')}</Button>}
