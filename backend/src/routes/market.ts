@@ -38,7 +38,7 @@ marketRouter.get('/companies', h(async (req, res) => {
 marketRouter.get('/companies/:slug', h(async (req, res) => {
   const slug = parse(z.string().regex(/^[a-z0-9-]{3,60}$/), req.params.slug);
   const c = (await query<Record<string, any>>(
-    `SELECT Id, Slug, Name, Description, LogoUrl, CoverUrl, PrimaryColor FROM Companies WHERE Slug=@s AND Status='approved' AND IsDeleted=0 AND IsPlatform=0`,
+    `SELECT Id, Slug, Name, Description, LogoUrl, CoverUrl, WhatsApp, PrimaryColor FROM Companies WHERE Slug=@s AND Status='approved' AND IsDeleted=0 AND IsPlatform=0`,
     { s: slug },
   ))[0];
   if (!c) throw new HttpError(404, 'NOT_FOUND', 'Company not found');
@@ -53,7 +53,7 @@ marketRouter.get('/companies/:slug', h(async (req, res) => {
     { c: c.Id },
   );
   const sectors = await query(`SELECT s.Code, s.NameAr, s.NameEn FROM CompanySectors cs JOIN Sectors s ON s.Id=cs.SectorId WHERE cs.CompanyId=@c`, { c: c.Id });
-  res.json({ slug: c.Slug, name: c.Name, description: c.Description, logoUrl: c.LogoUrl, coverUrl: c.CoverUrl, primaryColor: c.PrimaryColor, sectors, services });
+  res.json({ slug: c.Slug, name: c.Name, description: c.Description, logoUrl: c.LogoUrl, coverUrl: c.CoverUrl, whatsapp: c.WhatsApp ? '966' + String(c.WhatsApp).slice(1) : null, primaryColor: c.PrimaryColor, sectors, services });
 }));
 
 const requestLimiter = rateLimit({ windowMs: 10 * 60_000, limit: 8, standardHeaders: true, legacyHeaders: false, skip: () => config.env === 'test' });

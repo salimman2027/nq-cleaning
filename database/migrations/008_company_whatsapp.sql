@@ -1,0 +1,2 @@
+ALTER TABLE Companies ADD WhatsApp VARCHAR(20) NULL;
+GO

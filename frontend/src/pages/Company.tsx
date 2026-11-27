@@ -7,7 +7,7 @@ import { Button, ErrorBox, Field, ImageUpload, Input, Modal, Skeleton } from '..
 
 interface Addr { buildingNo: string; street: string; district: string; city: string; postalCode: string; additionalNo: string }
 interface Profile {
-  name: string; slug: string; logoUrl: string | null; coverUrl: string | null; primaryColor: string | null; status: string; description: string | null; crNumber: string | null; vatNumber: string | null;
+  name: string; slug: string; logoUrl: string | null; coverUrl: string | null; whatsapp: string | null; primaryColor: string | null; status: string; description: string | null; crNumber: string | null; vatNumber: string | null;
   nationalAddress: Addr | null; documents: Doc[]; extractionEnabled: boolean; reviewNote: string | null; sectorCodes: string[]; missing: string[];
 }
 interface Doc { kind: 'cr' | 'vat' | 'address'; fileName: string; mimeType: string; extracted: { crNumber?: string; vatNumber?: string; nationalAddress?: Partial<Addr> } | null; mismatch: string[] }
@@ -22,7 +22,7 @@ export default function Company() {
   const lab = (ks: string[]) => ks.map((k) => (MISSING[k] ? t(MISSING[k]) : k)).join('، ');
   const { reload } = useAuth();
   const [p, setP] = useState<Profile | null>(null);
-  const [form, setForm] = useState({ name: '', slug: '', description: '', logoUrl: '', coverUrl: '', primaryColor: '', crNumber: '', vatNumber: '', addr: EMPTY });
+  const [form, setForm] = useState({ name: '', slug: '', description: '', logoUrl: '', coverUrl: '', whatsapp: '', primaryColor: '', crNumber: '', vatNumber: '', addr: EMPTY });
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -31,7 +31,7 @@ export default function Company() {
 
   const apply = useCallback((r: Profile) => {
     setP(r);
-    setForm({ name: r.name, slug: r.slug ?? '', description: r.description ?? '', logoUrl: r.logoUrl ?? '', coverUrl: r.coverUrl ?? '', primaryColor: r.primaryColor ?? '', crNumber: r.crNumber ?? '', vatNumber: r.vatNumber ?? '', addr: r.nationalAddress ?? EMPTY });
+    setForm({ name: r.name, slug: r.slug ?? '', description: r.description ?? '', logoUrl: r.logoUrl ?? '', coverUrl: r.coverUrl ?? '', whatsapp: r.whatsapp ?? '', primaryColor: r.primaryColor ?? '', crNumber: r.crNumber ?? '', vatNumber: r.vatNumber ?? '', addr: r.nationalAddress ?? EMPTY });
   }, []);
   useEffect(() => { api<Profile>('/company').then(apply).catch(() => setError('Error')); }, [apply]);
 
@@ -55,7 +55,7 @@ export default function Company() {
     try { apply(await fn()); await reload(); setMsg(t('saved')); } catch (e) { setPopup([e instanceof ApiError ? `${t((`err_${e.code}` in dictKeys ? `err_${e.code}` : 'err_VALIDATION_ERROR') as Key)}${Array.isArray((e.details as { missing?: string[] })?.missing) ? ': ' + lab((e.details as { missing: string[] }).missing) : ''}` : 'Error']); } finally { setBusy(false); }
   };
   const save = () => act(() => api<Profile>('/company', { method: 'PUT', body: {
-    name: form.name, slug: form.slug, description: form.description || null, logoUrl: form.logoUrl.trim() || null, coverUrl: form.coverUrl.trim() || null, primaryColor: form.primaryColor || null,
+    name: form.name, slug: form.slug, description: form.description || null, logoUrl: form.logoUrl.trim() || null, coverUrl: form.coverUrl.trim() || null, whatsapp: /^05\d{8}$/.test(form.whatsapp) ? form.whatsapp : null, primaryColor: form.primaryColor || null,
     ...(locked ? {} : { ...(form.crNumber ? { crNumber: form.crNumber } : {}), ...(form.vatNumber ? { vatNumber: form.vatNumber } : {}), ...(addrComplete ? { nationalAddress: form.addr } : {}) }),
   } }));
   const submit = () => {
@@ -123,6 +123,7 @@ export default function Company() {
         <Field label={t('description')}><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
         <Field label={t('logoUrl').replace(/^رابط |\s*URL|\s*\(https\)/g, '')}><ImageUpload value={form.logoUrl} onChange={(u) => setForm({ ...form, logoUrl: u })} round /></Field>
         <Field label={t('coverUrl').replace(/^رابط |\s*URL|\s*\(https\)/g, '')}><ImageUpload value={form.coverUrl} onChange={(u) => setForm({ ...form, coverUrl: u })} /></Field>
+        <Field label={t('whatsappLbl')}><Input dir="ltr" inputMode="numeric" placeholder="05XXXXXXXX" maxLength={10} value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} /></Field>
         <Field label={t('brandColor')}><Input type="color" value={form.primaryColor || '#0f3f8f'} onChange={(e) => setForm({ ...form, primaryColor: e.target.value })} /></Field>
         <Field label={t('cr')}><Input className={red('cr')} dir="ltr" inputMode="numeric" disabled={locked} value={form.crNumber} onChange={(e) => setForm({ ...form, crNumber: e.target.value })} /></Field>
         <Field label={t('vat')}><Input className={red('vat')} dir="ltr" inputMode="numeric" disabled={locked} value={form.vatNumber} onChange={(e) => setForm({ ...form, vatNumber: e.target.value })} /></Field>

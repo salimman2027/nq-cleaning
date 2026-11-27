@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type PointerEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useI18n, type Key } from '../i18n';
@@ -7,7 +7,7 @@ import { ErrorBox, Modal, money, Skeleton } from '../ui';
 import { PublicShell } from './Home';
 
 interface Store {
-  slug: string; name: string; description: string | null; logoUrl: string | null; coverUrl?: string | null; primaryColor: string | null;
+  slug: string; name: string; description: string | null; logoUrl: string | null; coverUrl?: string | null; whatsapp?: string | null; primaryColor: string | null;
   sectors: { Code: string; NameAr: string; NameEn: string }[];
   services: { Id: number; Name: string; DefaultMinutes: number; FromPrice: number | null; ImageUrl: string | null; Category: string | null; Description: string | null; Includes: string | null; Notes: string | null }[];
 }
@@ -48,6 +48,12 @@ function RequestForm({ store, color, picked }: { store: Store; color: string; pi
   );
 }
 
+const glowMove = (e: PointerEvent<HTMLElement>) => {
+  const r = e.currentTarget.getBoundingClientRect();
+  e.currentTarget.style.setProperty('--x', `${e.clientX - r.left}px`);
+  e.currentTarget.style.setProperty('--y', `${e.clientY - r.top}px`);
+};
+
 export default function Storefront() {
   const { slug } = useParams();
   const { t, lang } = useI18n();
@@ -60,6 +66,7 @@ export default function Storefront() {
   const [picked, setPicked] = useState('');
   const [detail, setDetail] = useState<Store['services'][number] | null>(null);
   const order = (id: number) => { setDetail(null); setPicked(String(id)); setTimeout(() => document.getElementById('request')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50); };
+  const collage = (s?.services ?? []).map((x) => x.ImageUrl).filter((x): x is string => Boolean(x));
   const groups = (() => {
     const m = new Map<string, Store['services']>();
     for (const x of s?.services ?? []) { const k = x.Category || t('otherServices'); m.set(k, [...(m.get(k) ?? []), x]); }
@@ -71,24 +78,70 @@ export default function Storefront() {
       {!s && !error && <div className="mx-auto max-w-5xl p-4"><Skeleton rows={4} /></div>}
       {s && (
         <>
-          <section className="lattice text-white" style={{ background: s.coverUrl ? `linear-gradient(${color}d9, ${color}f2), url("${s.coverUrl}") center/cover` : color }}>
-            <div className="mx-auto max-w-5xl px-4 pb-10 pt-6">
-              <Link to="/" className="text-sm text-white/75 hover:text-white">← {t('back')}</Link>
-              <div className="mt-5 flex items-center gap-4">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-white text-3xl font-bold shadow-lg" style={{ color }}>
-                  {s.logoUrl ? <img src={s.logoUrl} alt="" className="h-full w-full object-cover" /> : s.name.slice(0, 1)}
+          {s.sectors.length > 0 && (
+            <div className="px-4 py-1.5 text-center text-xs font-medium text-white" style={{ background: color }}>
+              {t('bookOnline')} · {s.sectors.map((x) => (lang === 'ar' ? x.NameAr : x.NameEn)).join(' · ')}
+            </div>
+          )}
+          <section className="relative overflow-hidden" style={{ background: `linear-gradient(160deg, ${color}14, transparent 60%)` }}>
+            <div className="mx-auto grid max-w-5xl items-center gap-8 px-4 py-10 md:grid-cols-2 md:py-14">
+              <div className="rise">
+                <Link to="/" className="text-sm text-slate-500 hover:text-slate-800">← {t('back')}</Link>
+                <div className="mt-4 flex items-center gap-3">
+                  <span className="logo-pop flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white text-2xl font-bold shadow ring-1 ring-slate-200" style={{ color }}>
+                    {s.logoUrl ? <img src={s.logoUrl} alt="" className="h-full w-full object-cover" /> : s.name.slice(0, 1)}
+                  </span>
+                  <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">{s.name}</span>
                 </div>
-                <div className="min-w-0">
-                  <h1 className="text-2xl font-bold sm:text-3xl">{s.name}</h1>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {s.sectors.map((x) => <span key={x.Code} className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-sm"><SectorIcon code={x.Code} className="h-4 w-4" />{lang === 'ar' ? x.NameAr : x.NameEn}</span>)}
-                  </div>
+                <h1 className="mt-4 text-3xl font-bold leading-[1.3] sm:text-5xl sm:leading-[1.25]">{t('storeHeadline1')}<br /><span style={{ color }}>{t('storeHeadline2')}</span></h1>
+                {s.description && <p className="mt-4 max-w-md text-slate-600 dark:text-slate-300">{s.description}</p>}
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {s.sectors.map((x) => <span key={x.Code} className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-sm shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" style={{ color }}><SectorIcon code={x.Code} className="h-4 w-4" />{lang === 'ar' ? x.NameAr : x.NameEn}</span>)}
+                </div>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <button onClick={() => document.getElementById('request')?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className="tile rounded-full px-6 py-3 font-semibold text-white shadow-lg" style={{ background: color }}>{t('bookNow')}</button>
+                  <button onClick={() => document.getElementById('cat-0')?.scrollIntoView({ behavior: 'smooth' })} className="tile rounded-full bg-white px-6 py-3 font-semibold shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">{t('exploreSections')}</button>
                 </div>
               </div>
-              {s.description && <p className="mt-5 max-w-2xl text-white/85">{s.description}</p>}
+              <div className="relative mx-auto grid h-72 w-full max-w-sm grid-cols-2 gap-3 sm:h-96" aria-hidden>
+                {[0, 1, 2].map((i) => {
+                  const img = i === 0 ? (s.coverUrl ?? collage[0]) : collage[i];
+                  return (
+                    <div key={i} className={`lattice overflow-hidden shadow-lg ${i === 0 ? 'row-span-2 rounded-[2rem] rounded-es-[5rem]' : 'rounded-3xl'}`}
+                      style={{ background: img ? `url("${img}") center/cover` : `linear-gradient(${135 + i * 40}deg, ${color}, ${color}88)` }}>
+                      {!img && <div className="flex h-full items-center justify-center text-white/40"><SectorIcon code={s.sectors[i % Math.max(1, s.sectors.length)]?.Code ?? 'cleaning'} className="h-14 w-14" /></div>}
+                    </div>
+                  );
+                })}
+                <div className="star-float absolute -start-3 top-1/2 flex -translate-y-1/2 items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-xl dark:bg-slate-900">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl text-white" style={{ background: color }}><SectorIcon code={s.sectors[0]?.Code ?? 'cleaning'} className="h-5 w-5" /></span>
+                  <span><b className="block text-xl leading-none">+{s.services.length}</b><span className="text-xs text-slate-500">{t('servicesAvailable')}</span></span>
+                </div>
+              </div>
             </div>
           </section>
           <main className="mx-auto max-w-5xl px-4 py-8">
+            {groups.length > 1 && (
+              <section className="mb-10">
+                <h2 className="mb-1 text-2xl font-bold">{t('oneBrandTitle')}</h2>
+                <p className="mb-4 text-sm text-slate-500">{t('oneBrandSub')}</p>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                  {groups.map(([cat, list], i) => {
+                    const img = list.find((x) => x.ImageUrl)?.ImageUrl;
+                    const from = Math.min(...list.map((x) => x.FromPrice ?? Infinity));
+                    return (
+                      <button key={cat} onClick={() => document.getElementById(`cat-${i}`)?.scrollIntoView({ behavior: 'smooth' })} onPointerMove={glowMove}
+                        className="card-lift glow lattice relative flex h-40 flex-col justify-end overflow-hidden rounded-3xl p-4 text-start text-white shadow-md sm:h-48"
+                        style={{ background: img ? `linear-gradient(transparent 20%, ${color}f0), url("${img}") center/cover` : `linear-gradient(145deg, ${color}, ${color}aa)` }}>
+                        {Number.isFinite(from) && <span className="absolute end-3 top-3 rounded-full bg-white px-2.5 py-0.5 text-xs font-bold" style={{ color }}>{t('fromShort')} {money(from, lang)}</span>}
+                        <span className="text-lg font-bold">{cat}</span>
+                        <span className="text-xs text-white/80">{list.length} {t('servicesCount')}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
             {groups.length > 1 && (
               <nav aria-label="categories" className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1">
                 {groups.map(([cat], i) => (
@@ -133,8 +186,23 @@ export default function Storefront() {
                 <button onClick={() => order(detail.Id)} className="tile w-full rounded-xl px-4 py-3 font-semibold text-white" style={{ background: color }}>{t('orderNow')}</button>
               </Modal>
             )}
+            <section className="mb-8 grid gap-3 sm:grid-cols-3">
+              {([['1', 'step1'], ['2', 'step2'], ['3', 'step3']] as const).map(([n, k]) => (
+                <div key={n} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: color }}>{n}</span>
+                  <div className="mt-2 font-semibold">{t(k)}</div>
+                  <p className="text-sm text-slate-500">{t(`${k}d` as Key)}</p>
+                </div>
+              ))}
+            </section>
             {s.services.length > 0 && <RequestForm store={s} color={color} picked={picked} />}
           </main>
+          {s.whatsapp && (
+            <a href={`https://wa.me/${s.whatsapp}?text=${encodeURIComponent(`${t('waHello')} ${s.name}`)}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp"
+              className="tile fixed bottom-5 start-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#25d366] text-white shadow-xl">
+              <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 12a8 8 0 0 1-11.8 7L4 20l1.1-4.1A8 8 0 1 1 20 12z" /><path d="M9 9.5c0 3 2.500 5.500 5.500 5.500l1-1.500-1.800-.9-.8.800a4 4 0 0 1-1.800-1.800l.8-.8L10.200 8.500z" /></svg>
+            </a>
+          )}
         </>
       )}
     </PublicShell>
