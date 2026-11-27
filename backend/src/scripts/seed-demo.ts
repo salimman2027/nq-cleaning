@@ -154,7 +154,7 @@ export async function seedDemo(): Promise<{ owners: { email: string; password: s
     }
 
     // 150 bookings across approved companies. Each technician gets distinct, non-overlapping 3-hour slots
-    // (09/13/17 h) on consecutive days, so the overlap trigger can never fire.
+    // (07/13/19 h; longest service is 5 h) on consecutive days, so the overlap trigger can never fire.
     const statuses = ['new', 'confirmed', 'assigned', 'completed', 'completed', 'cancelled'] as const;
     const perCompany = Math.floor(150 / approved.length);
     const base = Date.UTC(2026, 0, 5);
@@ -165,7 +165,7 @@ export async function seedDemo(): Promise<{ owners: { email: string; password: s
         const svc = pick(co.services);
         const tech = co.techs[b % co.techs.length];
         const slotIdx = Math.floor(b / co.techs.length); // per-technician sequence
-        const start = new Date(base + (Math.floor(slotIdx / 3) * 86400 + [9, 13, 17][slotIdx % 3] * 3600) * 1000);
+        const start = new Date(base + (Math.floor(slotIdx / 3) * 86400 + [7, 13, 19][slotIdx % 3] * 3600) * 1000);
         const end = new Date(start.getTime() + svc.minutes * 60000);
         const status = pick(statuses);
         const totals = calcTotals([{ quantity: 1, unitPrice: svc.price }], 0, 15);
