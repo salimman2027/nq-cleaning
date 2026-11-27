@@ -43,7 +43,7 @@ marketRouter.get('/companies/:slug', h(async (req, res) => {
   ))[0];
   if (!c) throw new HttpError(404, 'NOT_FOUND', 'Company not found');
   const services = await query(
-    `SELECT s.Id, s.Name, s.PricingMethod, s.DefaultMinutes, p.Price AS FromPrice, p.Unit
+    `SELECT s.Id, s.Name, s.PricingMethod, s.DefaultMinutes, s.ImageUrl, s.Category, p.Price AS FromPrice, p.Unit
        FROM Services s
        OUTER APPLY (SELECT TOP 1 Price, Unit FROM ServicePrices sp
                      WHERE sp.ServiceId=s.Id AND sp.Region IS NULL AND sp.CustomerType IS NULL

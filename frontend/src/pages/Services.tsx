@@ -35,12 +35,12 @@ export default function Services() {
 
 function NewService({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n();
-  const [f, setF] = useState({ name: '', pricingMethod: 'fixed', defaultMinutes: '120', price: '' });
+  const [f, setF] = useState({ name: '', pricingMethod: 'fixed', defaultMinutes: '120', price: '', imageUrl: '', category: '' });
   const [err, setErr] = useState('');
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await api('/services', { method: 'POST', body: { name: f.name, pricingMethod: f.pricingMethod, defaultMinutes: Number(f.defaultMinutes), price: Number(f.price) } });
+      await api('/services', { method: 'POST', body: { name: f.name, pricingMethod: f.pricingMethod, defaultMinutes: Number(f.defaultMinutes), price: Number(f.price), imageUrl: f.imageUrl.trim() || null, category: f.category.trim() || null } });
       onSaved();
     } catch (ex) { setErr(ex instanceof ApiError ? ex.message : 'Error'); }
   };
@@ -51,6 +51,8 @@ function NewService({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
         <Field label={t('pricingMethod')}><Select value={f.pricingMethod} onChange={(e) => setF({ ...f, pricingMethod: e.target.value })}>{METHODS.map((m) => <option key={m}>{m}</option>)}</Select></Field>
         <Field label={t('defaultMinutes')}><Input type="number" min={15} required value={f.defaultMinutes} onChange={(e) => setF({ ...f, defaultMinutes: e.target.value })} /></Field>
         <Field label={t('price')}><Input type="number" min={0} step="0.01" required value={f.price} onChange={(e) => setF({ ...f, price: e.target.value })} /></Field>
+        <Field label={t('categoryLbl')}><Input value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} /></Field>
+        <Field label={t('imageUrlSvc')}><Input dir="ltr" placeholder="https://…" value={f.imageUrl} onChange={(e) => setF({ ...f, imageUrl: e.target.value })} /></Field>
         {err && <div className="sm:col-span-2"><ErrorBox message={err} /></div>}
         <div className="flex gap-2 sm:col-span-2"><Button type="submit">{t('save')}</Button><Button type="button" variant="ghost" onClick={onClose}>{t('cancel')}</Button></div>
       </form>
