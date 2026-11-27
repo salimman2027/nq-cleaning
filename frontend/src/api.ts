@@ -53,7 +53,7 @@ function refresh(): Promise<boolean> {
 }
 
 const CKEY = 'nq.customer';
-export const customerToken = (): string | null => { getItem(CKEY);
+export const customerToken = (): string | null => getItem(CKEY);
 export function saveCustomerToken(t: string | null): void { try { clearItem(CKEY); if (t) store().setItem(CKEY, t); } catch { /* ignore */ } }
 
 export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown; customer?: boolean } = {}, retry = true): Promise<T> {
