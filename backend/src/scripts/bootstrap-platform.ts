@@ -12,7 +12,11 @@ export async function bootstrapPlatform(i: { name?: string; adminName?: string; 
     await ensureRoles(tx, companyId, true);
     const email = i.adminEmail.toLowerCase();
     const exists = await query(`SELECT TOP 1 Id FROM Users WHERE Email=@e AND IsDeleted=0`, { e: email }, tx);
-    if (exists[0]) return { companyId, adminId: null };
+    if (exists[0]) {
+      const same = await query(`SELECT 1 AS x FROM Users WHERE Id=@i AND CompanyId=@c`, { i: exists[0].Id, c: companyId }, tx);
+      if (!same[0]) throw new Error('ADMIN_EMAIL is already used by a company user. Use a different e-mail for the platform admin.');
+      return { companyId, adminId: null };
+    }
     const u = (await query<{ Id: number }>(
       `INSERT INTO Users (CompanyId, FullName, Email, PasswordHash) OUTPUT INSERTED.Id VALUES (@c,@n,@e,@p)`,
       { c: companyId, n: i.adminName ?? 'Platform Admin', e: email, p: await bcrypt.hash(i.adminPassword, 12) },
