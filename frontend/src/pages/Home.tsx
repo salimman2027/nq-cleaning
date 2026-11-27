@@ -15,6 +15,8 @@ export function PublicShell({ children, flush = false }: { children: ReactNode; 
   const { t, toggle } = useI18n();
   const { me } = useAuth();
   const { count, customer } = useShop();
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
+  const flip = () => { const n = !dark; document.documentElement.classList.toggle('dark', n); try { localStorage.setItem('nq.dark', n ? '1' : '0'); } catch { /* ignore */ } setDark(n); };
   const [logo, setLogo] = useState<string | null>(null);
   useEffect(() => { api<{ logoUrl: string | null }>('/market/brand').then((r) => setLogo(r.logoUrl)).catch(() => undefined); }, []);
   return (
@@ -36,6 +38,7 @@ export function PublicShell({ children, flush = false }: { children: ReactNode; 
               <svg viewBox="0 0 24 24" className={`h-5 w-5 ${customer ? 'text-[var(--color-accent)]' : ''}`} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><circle cx="12" cy="8" r="3.500" /><path d="M5 20c.8-3.600 3.700-5.500 7-5.500s6.200 1.900 7 5.500" /></svg>
             </Link>
             <span className="hidden sm:block"><ZoomControl /></span>
+            <button onClick={flip} aria-label={dark ? t('lightMode') : t('dark')} title={dark ? t('lightMode') : t('dark')} className="rounded-lg px-2.5 py-2 text-lg text-white/90 hover:bg-white/10">{dark ? '☀' : '☾'}</button>
             <button onClick={toggle} className="rounded-lg px-3 py-2 text-white/85 hover:bg-white/10">{t('lang')}</button>
           </nav>
         </div>

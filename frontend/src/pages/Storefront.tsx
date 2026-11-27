@@ -142,23 +142,15 @@ export default function Storefront() {
                     return (
                       <button key={cat} onClick={() => document.getElementById(`cat-${i}`)?.scrollIntoView({ behavior: 'smooth' })} onPointerMove={glowMove}
                         className="card-lift glow lattice relative flex h-40 flex-col justify-end overflow-hidden rounded-3xl p-4 text-start text-white shadow-md sm:h-48"
-                        style={{ background: img ? `linear-gradient(transparent 20%, ${color}f0), url("${img}") center/cover` : `linear-gradient(145deg, ${color}, ${color}aa)` }}>
+                        style={{ background: img ? `linear-gradient(to top, rgba(6,23,58,.92) 0%, rgba(6,23,58,.6) 42%, rgba(6,23,58,0) 78%), url("${img}") center/cover` : `linear-gradient(145deg, ${color}, ${color}aa)` }}>
                         {Number.isFinite(from) && <span className="absolute end-3 top-3 rounded-full bg-white px-2.5 py-0.5 text-xs font-bold" style={{ color }}>{t('fromShort')} {money(from, lang)}</span>}
-                        <span className="text-lg font-bold">{cat}</span>
-                        <span className="text-xs text-white/80">{list.length} {t('servicesCount')}</span>
+                        <span className="text-lg font-bold [text-shadow:0_1px_6px_rgba(0,0,0,.7)]">{cat}</span>
+                        <span className="text-xs text-white/90 [text-shadow:0_1px_4px_rgba(0,0,0,.7)]">{list.length} {t('servicesCount')}</span>
                       </button>
                     );
                   })}
                 </div>
               </section>
-            )}
-            {groups.length > 1 && (
-              <nav aria-label="categories" className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1">
-                {groups.map(([cat], i) => (
-                  <a key={cat} href={`#cat-${i}`} onClick={(e) => { e.preventDefault(); document.getElementById(`cat-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
-                    className="tile shrink-0 rounded-full bg-white px-4 py-2 text-sm font-medium shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" style={{ color }}>{cat}</a>
-                ))}
-              </nav>
             )}
             {groups.map(([cat, list], gi) => (
               <section key={cat} id={`cat-${gi}`} className="mb-8 scroll-mt-4">
@@ -166,11 +158,11 @@ export default function Storefront() {
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                   {list.map((x) => (
                     <article key={x.Id} className="card-lift overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
-                      <div className="lattice relative flex h-28 items-end justify-end p-2.5 text-white sm:h-36" style={{ background: x.ImageUrl ? `linear-gradient(transparent 35%, ${color}e6), url("${x.ImageUrl}") center/cover` : `linear-gradient(135deg, ${color}, ${color}99)` }}>
+                      <div className="lattice relative flex h-28 items-end justify-end p-2.5 text-white sm:h-36" style={{ background: x.ImageUrl ? `url("${x.ImageUrl}") center/cover` : `linear-gradient(135deg, ${color}, ${color}99)` }}>
                         {!x.ImageUrl && <SectorIcon code={s.sectors[0]?.Code ?? 'cleaning'} className="absolute start-3 top-3 h-9 w-9 opacity-40" />}
-                        <span className="text-sm font-semibold leading-tight drop-shadow">{x.Name}</span>
                       </div>
                       <div className="p-3">
+                        <h3 className="line-clamp-2 min-h-10 text-sm font-bold leading-snug">{x.Name}</h3>
                         <div className="text-xs text-slate-500">{x.DefaultMinutes} {t('minutes')}</div>
                         <div className="mt-1 h-6 font-bold" style={{ color }}>{x.FromPrice != null && <><span className="me-1 text-xs font-normal text-slate-500">{t('servicesFrom')}</span>{money(x.FromPrice, lang)}</>}</div>
                         <div className="mt-2 flex gap-2">
