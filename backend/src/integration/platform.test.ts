@@ -191,6 +191,11 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).get('/api/shop/me').set(auth(tok))).body.unseen, 0);
     const co = await request(app).post(`/api/shop/orders/${ok.body.id}/complaints`).set(auth(tok)).send({ message: 'The team did not show up on time.' });
     assert.equal(co.status, 201);
+    const form = { serviceId: svc, customerName: 'Sara Ali', phone: '0561112233', date: day, period: 'evening' };
+    assert.equal((await request(app).post('/api/market/companies/clean-co/requests').set(auth(tok)).send(form)).status, 201);
+    assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send(form)).status, 201, 'a visitor request is still accepted');
+    const after = await request(app).get('/api/shop/orders').set(auth(tok));
+    assert.equal(after.body.items.length, 2, 'the request sent while signed in appears in my orders; the visitor one does not');
   });
 
   test('platform monitor counts activity per period; complaints reach the platform only', async () => {
@@ -199,7 +204,7 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
       assert.equal(m.status, 200);
       const row = m.body.companies.find((c: { Id: number }) => c.Id === companyId);
       assert.ok(row, 'company listed');
-      assert.equal(Number(row.Requests), 2);
+      assert.equal(Number(row.Requests), 4);
       assert.equal(m.body.totals.requests >= 1, true);
     }
     assert.equal((await request(app).get('/api/platform/monitor?period=year').set(auth(platToken))).status, 400);

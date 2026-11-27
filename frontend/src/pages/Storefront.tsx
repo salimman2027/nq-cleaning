@@ -16,7 +16,8 @@ interface Store {
 
 function RequestForm({ store, color, picked }: { store: Store; color: string; picked: string }) {
   const { t } = useI18n();
-  const [f, setF] = useState({ serviceId: picked, customerName: '', phone: '', address: '', date: '', period: 'morning', notes: '' });
+  const { customer } = useShop();
+  const [f, setF] = useState({ serviceId: picked, customerName: customer?.name ?? '', phone: customer?.phone ?? '', address: '', date: '', period: 'morning', notes: '' });
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
@@ -26,7 +27,7 @@ function RequestForm({ store, color, picked }: { store: Store; color: string; pi
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setError('');
     try {
-      await api(`/market/companies/${store.slug}/requests`, { method: 'POST', body: { serviceId: Number(f.serviceId), customerName: f.customerName, phone: f.phone, address: f.address || undefined, date: f.date, period: f.period, notes: f.notes || undefined } });
+      await api(`/market/companies/${store.slug}/requests`, { method: 'POST', customer: !!customer, body: { serviceId: Number(f.serviceId), customerName: f.customerName, phone: f.phone, address: f.address || undefined, date: f.date, period: f.period, notes: f.notes || undefined } });
       setDone(true);
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Error'); } finally { setBusy(false); }
   };

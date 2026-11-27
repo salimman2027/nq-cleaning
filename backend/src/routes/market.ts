@@ -4,6 +4,7 @@ import { config } from '../config';
 import { query } from '../db';
 import { HttpError, h, parse } from '../errors';
 import rateLimit from 'express-rate-limit';
+import { optionalCustomerId } from './shop';
 import { isSaudiMobile } from '../lib/otp';
 
 /** Public, read-only marketplace endpoints. Only approved companies are ever visible. */
@@ -80,9 +81,9 @@ marketRouter.post('/companies/:slug/requests', requestLimiter, h(async (req, res
   const svc = await query(`SELECT 1 AS x FROM Services WHERE Id=@i AND CompanyId=@c AND IsActive=1 AND IsDeleted=0`, { i: b.serviceId, c: c.Id });
   if (!svc.length) throw new HttpError(400, 'BAD_SERVICE', 'Unknown service');
   const r = await query<{ Id: number }>(
-    `INSERT INTO BookingRequests (CompanyId, ServiceId, CustomerName, Phone, Address, PreferredDate, PreferredPeriod, Notes)
-     OUTPUT inserted.Id VALUES (@c,@s,@n,@p,@a,@d,@pe,@no)`,
-    { c: c.Id, s: b.serviceId, n: b.customerName, p: b.phone, a: b.address ?? null, d: b.date, pe: b.period, no: b.notes ?? null },
+    `INSERT INTO BookingRequests (CompanyId, ServiceId, CustomerName, Phone, Address, PreferredDate, PreferredPeriod, Notes, CustomerId)
+     OUTPUT inserted.Id VALUES (@c,@s,@n,@p,@a,@d,@pe,@no,@cu)`,
+    { c: c.Id, s: b.serviceId, n: b.customerName, p: b.phone, a: b.address ?? null, d: b.date, pe: b.period, no: b.notes ?? null, cu: optionalCustomerId(req) },
   );
   res.status(201).json({ id: r[0].Id, status: 'new' });
 }));

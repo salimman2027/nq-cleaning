@@ -32,6 +32,13 @@ function customerAuth(req: Request, _res: Response, next: NextFunction): void {
   }
 }
 
+/** Customer id from a valid customer token, or null for a visitor. Never fails the request. */
+export function optionalCustomerId(req: Request): number | null {
+  const t = (req.headers.authorization ?? '').replace(/^Bearer /, '');
+  if (!t) return null;
+  try { return (jwt.verify(t, secret(), { algorithms: ['HS256'] }) as unknown as { cus: number }).cus ?? null; } catch { return null; }
+}
+
 shopRouter.post('/register', limiter, h(async (req, res) => {
   const b = parse(z.object({ name: z.string().trim().min(2).max(100), phone: phoneSchema, password: passSchema }), req.body);
   const exists = await query(`SELECT TOP 1 1 AS x FROM MarketplaceCustomers WHERE Phone=@p AND IsDeleted=0`, { p: b.phone });
