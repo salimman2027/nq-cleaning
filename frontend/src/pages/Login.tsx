@@ -5,6 +5,7 @@ import { api, ApiError } from '../api';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 import { Button, ErrorBox, Field, Input, PasswordInput } from '../ui';
+import { Remember } from '../Remember';
 
 export default function Login() {
   const { login } = useAuth();
@@ -60,6 +61,7 @@ export default function Login() {
           <>
             <Field label={t('email')}><Input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
             <Field label={t('password')}><PasswordInput autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
+            <Remember />
           </>
         ) : (
           <>

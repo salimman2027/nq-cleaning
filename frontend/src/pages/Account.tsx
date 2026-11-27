@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useI18n, type Key } from '../i18n';
 import { useShop } from '../shop';
+import { Remember } from '../Remember';
 import { Button, ErrorBox, Field, Input, PasswordInput, money, Skeleton } from '../ui';
 import ComplaintForm from './ComplaintForm';
 import { PublicShell } from './Home';
@@ -45,6 +46,7 @@ export default function Account() {
             {mode === 'register' && <Field label={t('yourName')}><Input required minLength={2} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>}
             <Field label={t('yourPhone')}><Input required dir="ltr" inputMode="numeric" pattern="05[0-9]{8}" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>
             <Field label={t('password')}><PasswordInput required minLength={8} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
+            {mode === 'login' && <Remember />}
             <Button type="submit" disabled={busy} className="w-full">{mode === 'login' ? t('login') : t('createAccount')}</Button>
             <button type="button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setErr(''); }} className="w-full text-sm text-cyan-700 dark:text-cyan-400">{mode === 'login' ? t('noAccount') : t('haveAccount')}</button>
           </form>

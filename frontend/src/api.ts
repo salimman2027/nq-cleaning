@@ -9,9 +9,17 @@ export class ApiError extends Error {
 
 interface Tokens { accessToken: string; refreshToken: string }
 
+/** "Remember me": keep the session in this browser (default) or only until the tab closes. */
+const RKEY = 'nq.remember';
+export const getRemember = (): boolean => { try { return localStorage.getItem(RKEY) !== '0'; } catch { return true; } };
+export function setRemember(v: boolean): void { try { localStorage.setItem(RKEY, v ? '1' : '0'); } catch { /* ignore */ } }
+const store = (): Storage => (getRemember() ? localStorage : sessionStorage);
+const getItem = (k: string): string | null => { try { return localStorage.getItem(k) ?? sessionStorage.getItem(k); } catch { return null; } };
+const clearItem = (k: string): void => { try { localStorage.removeItem(k); sessionStorage.removeItem(k); } catch { /* ignore */ } };
+
 function read(): Tokens | null {
   try {
-    const v = localStorage.getItem(KEY);
+    const v = getItem(KEY);
     return v ? (JSON.parse(v) as Tokens) : null;
   } catch {
     return null;
@@ -19,8 +27,7 @@ function read(): Tokens | null {
 }
 export function saveTokens(t: Tokens | null): void {
   try {
-    if (t) localStorage.setItem(KEY, JSON.stringify(t));
-    else localStorage.removeItem(KEY);
+    if (t) { const had = localStorage.getItem(KEY) !== null; (had ? localStorage : store()).setItem(KEY, JSON.stringify(t)); } else clearItem(KEY);
   } catch {
     /* storage unavailable: session lasts until reload */
   }
@@ -46,8 +53,8 @@ function refresh(): Promise<boolean> {
 }
 
 const CKEY = 'nq.customer';
-export const customerToken = (): string | null => { try { return localStorage.getItem(CKEY); } catch { return null; } };
-export function saveCustomerToken(t: string | null): void { try { if (t) localStorage.setItem(CKEY, t); else localStorage.removeItem(CKEY); } catch { /* ignore */ } }
+export const customerToken = (): string | null => { getItem(CKEY);
+export function saveCustomerToken(t: string | null): void { try { clearItem(CKEY); if (t) store().setItem(CKEY, t); } catch { /* ignore */ } }
 
 export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown; customer?: boolean } = {}, retry = true): Promise<T> {
   const ct = opts.customer ? customerToken() : null;
