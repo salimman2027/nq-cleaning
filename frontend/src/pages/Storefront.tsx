@@ -19,7 +19,7 @@ export default function Storefront() {
   useEffect(() => {
     api<Store>(`/market/companies/${slug}`).then(setS).catch((e) => setError(e instanceof ApiError && e.status === 404 ? t('noCompanies') : 'Error'));
   }, [slug, t]);
-  const color = s?.primaryColor ?? '#0e7490';
+  const color = s?.primaryColor ?? '#0f3f8f';
   return (
     <PublicShell>
       <Link to="/" className="text-sm text-slate-500">← {t('back')}</Link>

@@ -145,3 +145,25 @@ platformRouter.put('/sectors/:id', requirePerm('platform.sectors.manage'), h(asy
   if (!r.length) throw new HttpError(404, 'NOT_FOUND', 'Sector not found');
   res.json({ id });
 }));
+
+/** Platform branding (logo shown on the public site). Stored as a setting of the platform company. */
+platformRouter.get('/brand', requirePerm('platform.companies.view'), h(async (_req, res) => {
+  const r = await query<{ Value: string }>(`SELECT s.Value FROM SystemSettings s JOIN Companies c ON c.Id=s.CompanyId WHERE c.IsPlatform=1 AND s.[Key]='brand.logoUrl'`);
+  res.json({ logoUrl: r[0]?.Value ?? null });
+}));
+
+platformRouter.put('/brand', requirePerm('platform.brand.manage'), h(async (req, res) => {
+  const b = parse(z.object({ logoUrl: z.string().url().max(500).refine((u) => u.startsWith('https://'), 'https only').nullable() }), req.body);
+  const co = (await query<{ Id: number }>(`SELECT TOP 1 Id FROM Companies WHERE IsPlatform=1`))[0];
+  if (!co) throw new HttpError(404, 'NOT_FOUND', 'Platform company not found');
+  if (b.logoUrl) {
+    await query(
+      `MERGE SystemSettings AS t USING (SELECT @c AS CompanyId, 'brand.logoUrl' AS [Key]) AS s ON t.CompanyId=s.CompanyId AND t.[Key]=s.[Key]
+       WHEN MATCHED THEN UPDATE SET Value=@v WHEN NOT MATCHED THEN INSERT (CompanyId,[Key],Value) VALUES (@c,'brand.logoUrl',@v);`,
+      { c: co.Id, v: b.logoUrl },
+    );
+  } else {
+    await query(`DELETE FROM SystemSettings WHERE CompanyId=@c AND [Key]='brand.logoUrl'`, { c: co.Id });
+  }
+  res.json({ logoUrl: b.logoUrl });
+}));

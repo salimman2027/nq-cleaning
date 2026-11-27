@@ -14,9 +14,11 @@ import Storefront from './pages/Storefront';
 import Register from './pages/Register';
 import Company from './pages/Company';
 import Review from './pages/Review';
+import Settings from './pages/Settings';
 
 const NAV: { to: string; key: Key; perm: string; icon: string }[] = [
   { to: '/app/review', key: 'review', perm: 'platform.companies.view', icon: '✅' },
+  { to: '/app/settings', key: 'settings', perm: 'platform.brand.manage', icon: '⚙' },
   { to: '/app/company', key: 'company', perm: 'company.profile.manage', icon: '🏢' },
   { to: '/app', key: 'dashboard', perm: 'dashboard.view', icon: '▦' },
   { to: '/app/bookings', key: 'bookings', perm: 'bookings.view', icon: '📅' },
@@ -96,6 +98,7 @@ export default function App() {
         <Route index element={<AppHome />} />
         <Route path="company" element={<Company />} />
         <Route path="review" element={<Review />} />
+        <Route path="settings" element={<Settings />} />
         <Route path="bookings" element={<Bookings />} />
         <Route path="customers" element={<Customers />} />
         <Route path="technicians" element={<Technicians />} />

@@ -21,6 +21,7 @@ const dict = {
     district: 'الحي', city: 'المدينة', postal: 'الرمز البريدي', additional: 'الرقم الإضافي', description: 'نبذة', slugLabel: 'رابط الواجهة', submitReview: 'إرسال للمراجعة',
     st_draft: 'مسودة', st_pending_review: 'قيد المراجعة', st_approved: 'معتمدة', st_rejected: 'مرفوضة', st_suspended: 'موقوفة', rejectionReason: 'سبب الرفض', missingFields: 'بيانات ناقصة',
     approve: 'اعتماد', reject: 'رفض', suspend: 'إيقاف', reactivate: 'إعادة تفعيل', owner: 'المالك', pendingNote: 'طلبك قيد المراجعة. سنراسلك عند الاعتماد.', lockedNote: 'البيانات القانونية مقفلة بعد الاعتماد.',
+    settings: 'الإعدادات', brandColor: 'لون الواجهة', logoUrl: 'رابط الشعار (https)', removeLogo: 'إزالة الشعار',
     signInPhone: 'الدخول بالجوال', signInEmail: 'الدخول بالبريد', verify: 'تحقق',
   },
   en: {
@@ -43,6 +44,7 @@ const dict = {
     district: 'District', city: 'City', postal: 'Postal code', additional: 'Additional no.', description: 'About', slugLabel: 'Storefront link', submitReview: 'Submit for review',
     st_draft: 'Draft', st_pending_review: 'Pending review', st_approved: 'Approved', st_rejected: 'Rejected', st_suspended: 'Suspended', rejectionReason: 'Rejection reason', missingFields: 'Missing details',
     approve: 'Approve', reject: 'Reject', suspend: 'Suspend', reactivate: 'Reactivate', owner: 'Owner', pendingNote: 'Your request is under review. We will message you once approved.', lockedNote: 'Legal details are locked after approval.',
+    settings: 'Settings', brandColor: 'Storefront color', logoUrl: 'Logo URL (https)', removeLogo: 'Remove logo',
     signInPhone: 'Sign in with phone', signInEmail: 'Sign in with e-mail', verify: 'Verify',
   },
 } as const;

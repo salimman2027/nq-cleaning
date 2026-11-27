@@ -1,4 +1,11 @@
 @import "tailwindcss";
+@theme {
+  /* Original NQ palette: deep navy-blue primary with a warm accent. The "cyan" scale name is kept so existing classes pick it up. */
+  --color-cyan-50: #eff5ff; --color-cyan-100: #dbe8ff; --color-cyan-200: #bcd3fb; --color-cyan-300: #8fb3f3;
+  --color-cyan-400: #5f8fe6; --color-cyan-500: #3a6dcf; --color-cyan-600: #1f55b3; --color-cyan-700: #0f3f8f;
+  --color-cyan-800: #0c3170; --color-cyan-900: #0a2552; --color-cyan-950: #061633;
+  --color-accent: #f08a24;
+}
 @custom-variant dark (&:where(.dark, .dark *));
 
 html, body, #root { height: 100%; }

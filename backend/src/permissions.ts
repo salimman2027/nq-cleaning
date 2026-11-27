@@ -24,7 +24,7 @@ export const TENANT_PERMISSIONS = [
 ] as const;
 
 /** Permissions that only the platform operator's own staff can hold. Never granted to a tenant role. */
-export const PLATFORM_PERMISSIONS = ['platform.companies.view', 'platform.companies.review', 'platform.sectors.manage'] as const;
+export const PLATFORM_PERMISSIONS = ['platform.companies.view', 'platform.companies.review', 'platform.sectors.manage', 'platform.brand.manage'] as const;
 
 export const PERMISSIONS = [...TENANT_PERMISSIONS, ...PLATFORM_PERMISSIONS] as const;
 export type Permission = (typeof PERMISSIONS)[number];

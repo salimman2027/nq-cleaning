@@ -129,6 +129,16 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal(v.body.user.companyId, companyId);
   });
 
+  test('platform logo is a setting: only https, admin only, public read', async () => {
+    assert.equal((await request(app).get('/api/market/brand')).body.logoUrl, null);
+    assert.equal((await request(app).put('/api/platform/brand').set(auth(ownerToken)).send({ logoUrl: 'https://x.test/l.png' })).status, 403);
+    assert.equal((await request(app).put('/api/platform/brand').set(auth(platToken)).send({ logoUrl: 'http://x.test/l.png' })).status, 400);
+    assert.equal((await request(app).put('/api/platform/brand').set(auth(platToken)).send({ logoUrl: 'https://x.test/l.png' })).status, 200);
+    assert.equal((await request(app).get('/api/market/brand')).body.logoUrl, 'https://x.test/l.png');
+    assert.equal((await request(app).put('/api/platform/brand').set(auth(platToken)).send({ logoUrl: null })).status, 200);
+    assert.equal((await request(app).get('/api/market/brand')).body.logoUrl, null);
+  });
+
   test('demo seed creates marketplace data and purge removes exactly it', async () => {
     const { seedDemo, purgeDemo } = await import('../scripts/seed-demo');
     const { query } = await import('../db');

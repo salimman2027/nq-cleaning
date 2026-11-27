@@ -52,3 +52,8 @@ marketRouter.get('/companies/:slug', h(async (req, res) => {
   const sectors = await query(`SELECT s.Code, s.NameAr, s.NameEn FROM CompanySectors cs JOIN Sectors s ON s.Id=cs.SectorId WHERE cs.CompanyId=@c`, { c: c.Id });
   res.json({ slug: c.Slug, name: c.Name, description: c.Description, logoUrl: c.LogoUrl, primaryColor: c.PrimaryColor, sectors, services });
 }));
+
+marketRouter.get('/brand', h(async (_req, res) => {
+  const r = await query<{ Value: string }>(`SELECT s.Value FROM SystemSettings s JOIN Companies c ON c.Id=s.CompanyId WHERE c.IsPlatform=1 AND s.[Key]='brand.logoUrl'`);
+  res.json({ logoUrl: r[0]?.Value ?? null });
+}));

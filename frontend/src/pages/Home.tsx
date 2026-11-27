@@ -12,10 +12,12 @@ interface Co { Slug: string; Name: string; Description: string | null; LogoUrl: 
 export function PublicShell({ children }: { children: ReactNode }) {
   const { t, toggle } = useI18n();
   const { me } = useAuth();
+  const [logo, setLogo] = useState<string | null>(null);
+  useEffect(() => { api<{ logoUrl: string | null }>('/market/brand').then((r) => setLogo(r.logoUrl)).catch(() => undefined); }, []);
   return (
     <div className="min-h-full bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
-        <Link to="/" className="font-bold text-cyan-700 dark:text-cyan-400">{t('app')}</Link>
+        <Link to="/" className="flex items-center gap-2 font-bold text-cyan-700 dark:text-cyan-400">{logo && <img src={logo} alt="" className="h-8 w-auto" />}<span>{t('app')}</span></Link>
         <nav className="flex items-center gap-2 text-sm">
           <Link to="/join" className="rounded-lg border px-3 py-1 dark:border-slate-700">{t('joinAsCompany')}</Link>
           <Link to={me ? '/app' : '/login'} className="rounded-lg bg-cyan-700 px-3 py-1 text-white">{me ? t('company') : t('companyLogin')}</Link>
@@ -68,7 +70,7 @@ export default function Home() {
           {items.map((c) => (
             <Link key={c.Slug} to={`/c/${c.Slug}`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow dark:border-slate-800 dark:bg-slate-900">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl text-lg font-bold text-white" style={{ background: c.PrimaryColor ?? '#0e7490' }}>
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl text-lg font-bold text-white" style={{ background: c.PrimaryColor ?? '#0f3f8f' }}>
                   {c.LogoUrl ? <img src={c.LogoUrl} alt="" className="h-full w-full object-cover" /> : c.Name.slice(0, 1)}
                 </div>
                 <div className="min-w-0"><div className="truncate font-semibold">{c.Name}</div>
