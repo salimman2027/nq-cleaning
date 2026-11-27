@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, fileToBase64, openFile } from '../api';
 import { useAuth } from '../auth';
 import { useI18n, type Key } from '../i18n';
-import { Button, ErrorBox, Field, Input, Skeleton } from '../ui';
+import { Button, ErrorBox, Field, Input, Modal, Skeleton } from '../ui';
 
 interface Addr { buildingNo: string; street: string; district: string; city: string; postalCode: string; additionalNo: string }
 interface Profile {
@@ -26,6 +26,8 @@ export default function Company() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
+  const [popup, setPopup] = useState<string[] | null>(null);
 
   const apply = useCallback((r: Profile) => {
     setP(r);
@@ -37,19 +39,34 @@ export default function Company() {
   const editable = p.status === 'draft' || p.status === 'rejected' || p.status === 'approved';
   const locked = p.status === 'approved';
   const addrComplete = Object.values(form.addr).every(Boolean);
+  const a = form.addr;
+  const bad: Record<string, boolean> = {
+    name: form.name.trim().length < 2, cr: !/^\d{10}$/.test(form.crNumber), vat: !/^3\d{13}3$/.test(form.vatNumber),
+    building: !/^\d{4}$/.test(a.buildingNo), additional: !/^\d{4}$/.test(a.additionalNo), postal: !/^\d{5}$/.test(a.postalCode),
+    street: a.street.trim().length < 2, district: a.district.trim().length < 2, city: a.city.trim().length < 2,
+    doc_cr: !p.documents.some((d) => d.kind === 'cr'), doc_vat: !p.documents.some((d) => d.kind === 'vat'), doc_address: !p.documents.some((d) => d.kind === 'address'),
+    sectors: p.sectorCodes.length < 1,
+  };
+  const red = (k: string) => (tried && bad[k] ? '!border-red-500 !ring-2 !ring-red-300' : '');
+  const labelOf: Record<string, Key> = { name: 'companyName', cr: 'cr', vat: 'vat', building: 'building', additional: 'additional', postal: 'postal', street: 'street', district: 'district', city: 'city', doc_cr: 'doc_cr', doc_vat: 'doc_vat', doc_address: 'doc_address', sectors: 'sectors' };
 
   const act = async (fn: () => Promise<Profile>) => {
     setBusy(true); setError(''); setMsg('');
-    try { apply(await fn()); await reload(); setMsg(t('saved')); } catch (e) { setError(e instanceof ApiError ? `${t((`err_${e.code}` in dictKeys ? `err_${e.code}` : 'err_VALIDATION_ERROR') as Key)}${Array.isArray((e.details as { missing?: string[] })?.missing) ? ': ' + lab((e.details as { missing: string[] }).missing) : ''}` : 'Error'); } finally { setBusy(false); }
+    try { apply(await fn()); await reload(); setMsg(t('saved')); } catch (e) { setPopup([e instanceof ApiError ? `${t((`err_${e.code}` in dictKeys ? `err_${e.code}` : 'err_VALIDATION_ERROR') as Key)}${Array.isArray((e.details as { missing?: string[] })?.missing) ? ': ' + lab((e.details as { missing: string[] }).missing) : ''}` : 'Error']); } finally { setBusy(false); }
   };
   const save = () => act(() => api<Profile>('/company', { method: 'PUT', body: {
     name: form.name, slug: form.slug, description: form.description || null, logoUrl: form.logoUrl.trim() || null, coverUrl: form.coverUrl.trim() || null, primaryColor: form.primaryColor || null,
     ...(locked ? {} : { ...(form.crNumber ? { crNumber: form.crNumber } : {}), ...(form.vatNumber ? { vatNumber: form.vatNumber } : {}), ...(addrComplete ? { nationalAddress: form.addr } : {}) }),
   } }));
-  const submit = () => act(async () => { await api('/company/submit', { method: 'POST' }); return api<Profile>('/company'); });
+  const submit = () => {
+    setTried(true);
+    const problems = Object.keys(bad).filter((k) => bad[k] && k in labelOf).map((k) => `${t(labelOf[k])}: ${t('fieldBad')}`);
+    if (problems.length) { setPopup([...problems, t('fixRed')]); return; }
+    return act(async () => { await api('/company/submit', { method: 'POST' }); return api<Profile>('/company'); });
+  };
   const upload = (kind: string, f: File | undefined) => {
     if (!f) return;
-    if (f.size > 5 * 1024 * 1024) { setError('5 MB max'); return; }
+    if (f.size > 5 * 1024 * 1024) { setPopup([t('err_FILE_TOO_LARGE')]); return; }
     return act(async () => api<Profile>(`/company/documents/${kind}`, { method: 'PUT', body: { fileName: f.name, dataBase64: await fileToBase64(f) } }));
   };
   const useExtracted = (d: Doc) => {
@@ -78,7 +95,7 @@ export default function Company() {
           const d = p.documents.find((x) => x.kind === k);
           const needsFill = d?.extracted && !(k === 'cr' ? form.crNumber : k === 'vat' ? form.vatNumber : form.addr.buildingNo);
           return (
-            <div key={k} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+            <div key={k} className={`rounded-xl border p-3 ${tried && bad[`doc_${k}`] ? 'border-red-500 bg-red-50 dark:bg-red-950/30' : 'border-slate-200 dark:border-slate-700'}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0"><div className="text-sm font-medium">{t(`doc_${k}` as Key)}</div>
                   <div className="truncate text-xs text-slate-500" dir="ltr">{d ? d.fileName : t('docMissing')}</div></div>
@@ -101,28 +118,34 @@ export default function Company() {
         })}
       </section>
       <fieldset disabled={!editable || busy} className="space-y-3 rounded-2xl bg-white p-4 shadow dark:bg-slate-900">
-        <Field label={t('companyName')}><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+        <Field label={t('companyName')}><Input className={red('name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
         <Field label={t('slugLabel')}><Input dir="ltr" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase() })} /></Field>
         <Field label={t('description')}><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
         <Field label={t('logoUrl')}><Input dir="ltr" placeholder="https://…" value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} /></Field>
         <Field label={t('coverUrl')}><Input dir="ltr" placeholder="https://…" value={form.coverUrl} onChange={(e) => setForm({ ...form, coverUrl: e.target.value })} /></Field>
         <Field label={t('brandColor')}><Input type="color" value={form.primaryColor || '#0f3f8f'} onChange={(e) => setForm({ ...form, primaryColor: e.target.value })} /></Field>
-        <Field label={t('cr')}><Input dir="ltr" inputMode="numeric" disabled={locked} value={form.crNumber} onChange={(e) => setForm({ ...form, crNumber: e.target.value })} /></Field>
-        <Field label={t('vat')}><Input dir="ltr" inputMode="numeric" disabled={locked} value={form.vatNumber} onChange={(e) => setForm({ ...form, vatNumber: e.target.value })} /></Field>
+        <Field label={t('cr')}><Input className={red('cr')} dir="ltr" inputMode="numeric" disabled={locked} value={form.crNumber} onChange={(e) => setForm({ ...form, crNumber: e.target.value })} /></Field>
+        <Field label={t('vat')}><Input className={red('vat')} dir="ltr" inputMode="numeric" disabled={locked} value={form.vatNumber} onChange={(e) => setForm({ ...form, vatNumber: e.target.value })} /></Field>
         <div className="grid grid-cols-2 gap-3">
           <p className="col-span-2 text-sm font-medium">{t('natAddr')}</p>
-          <Field label={t('building')}><Input disabled={locked} inputMode="numeric" maxLength={4} value={form.addr.buildingNo} onChange={setA('buildingNo')} /></Field>
-          <Field label={t('additional')}><Input disabled={locked} inputMode="numeric" maxLength={4} value={form.addr.additionalNo} onChange={setA('additionalNo')} /></Field>
-          <Field label={t('street')}><Input disabled={locked} value={form.addr.street} onChange={setA('street')} /></Field>
-          <Field label={t('district')}><Input disabled={locked} value={form.addr.district} onChange={setA('district')} /></Field>
-          <Field label={t('city')}><Input disabled={locked} value={form.addr.city} onChange={setA('city')} /></Field>
-          <Field label={t('postal')}><Input disabled={locked} inputMode="numeric" maxLength={5} value={form.addr.postalCode} onChange={setA('postalCode')} /></Field>
+          <Field label={t('building')}><Input className={red('building')} disabled={locked} inputMode="numeric" maxLength={4} value={form.addr.buildingNo} onChange={setA('buildingNo')} /></Field>
+          <Field label={t('additional')}><Input className={red('additional')} disabled={locked} inputMode="numeric" maxLength={4} value={form.addr.additionalNo} onChange={setA('additionalNo')} /></Field>
+          <Field label={t('street')}><Input className={red('street')} disabled={locked} value={form.addr.street} onChange={setA('street')} /></Field>
+          <Field label={t('district')}><Input className={red('district')} disabled={locked} value={form.addr.district} onChange={setA('district')} /></Field>
+          <Field label={t('city')}><Input className={red('city')} disabled={locked} value={form.addr.city} onChange={setA('city')} /></Field>
+          <Field label={t('postal')}><Input className={red('postal')} disabled={locked} inputMode="numeric" maxLength={5} value={form.addr.postalCode} onChange={setA('postalCode')} /></Field>
         </div>
       </fieldset>
       <div className="flex gap-2">
         {editable && <Button variant="ghost" onClick={save} disabled={busy}>{t('save')}</Button>}
         {(p.status === 'draft' || p.status === 'rejected') && <Button onClick={submit} disabled={busy}>{t('submitReview')}</Button>}
       </div>
+      {popup && (
+        <Modal title={t('popupTitle')} onClose={() => setPopup(null)}>
+          <ul className="list-disc space-y-1.5 ps-5 text-sm">{popup.map((m, i) => <li key={i}>{m}</li>)}</ul>
+          <div className="mt-5 flex justify-end"><Button onClick={() => setPopup(null)}>{t('okBtn')}</Button></div>
+        </Modal>
+      )}
     </div>
   );
 }

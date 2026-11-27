@@ -63,7 +63,7 @@ test('reads numbers from PDF text with Arabic digits, either label order, and ig
   assert.equal(a.nationalAddress?.buildingNo, '1234');
   assert.equal(a.nationalAddress?.additionalNo, '5678');
   assert.equal(a.nationalAddress?.postalCode, '12211');
-  assert.equal(a.nationalAddress?.city, 'الرياض');
+  assert.equal(a.nationalAddress?.city, undefined); // text fields are never taken from PDF text (letter-reversal risk)
 });
 test('flags mismatches between file values and typed values', () => {
   assert.deepEqual(mismatches({ crNumber: '1010123456' }, { crNumber: '1010123457' }), ['crNumber']);

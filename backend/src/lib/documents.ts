@@ -63,10 +63,6 @@ const near = (text: string, label: RegExp, value: string, span = 25): string | u
   const before = text.match(new RegExp(`(${value})[^\\d\\n]{0,${span}}(?:${label.source})`, 'i'));
   return before?.[1];
 };
-const word = (text: string, label: RegExp): string | undefined => {
-  const m = text.match(new RegExp(`(?:${label.source})\\s*[:：]?\\s*([^\\n\\d:：]{2,60})`, 'i'));
-  return m?.[1].trim();
-};
 
 /**
  * Rule-based reading of text taken from a PDF (no AI). Layouts differ, so this is best effort: it returns only what it
@@ -84,8 +80,7 @@ export function parseDocumentText(kind: DocKind, raw: string): Extracted {
     buildingNo: near(t, /رقم المبنى|building\s*(?:no|number)?/, '\\d{4}(?!\\d)'),
     additionalNo: near(t, /الرقم الإضافي|الرقم الاضافي|additional\s*(?:no|number)?/, '\\d{4}(?!\\d)'),
     postalCode: near(t, /الرمز البريدي|الرمز البريدى|postal\s*code|zip/, '\\d{5}(?!\\d)'),
-    street: word(t, /اسم الشارع|الشارع|street(?:\s*name)?/),
-    district: word(t, /الحي|district|neighborhood/),
-    city: word(t, /المدينة|city/),
+    // Street, district and city are NOT read from PDF text: Arabic words often come out of PDFs letter-reversed, so
+    // they are only taken from the AI path (which looks at the page as an image) or typed by the owner.
   });
 }
