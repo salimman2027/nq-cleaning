@@ -1,0 +1,30 @@
+name: Add starter cleaning services to a company
+
+# Adds a starter catalogue (estimated SAR prices, editable in the app) to ONE company, matched by name. Safe to re-run:
+# services that already exist are skipped.
+on:
+  workflow_dispatch:
+    inputs:
+      company_name:
+        description: "Company name (or part of it)"
+        required: true
+        default: "متاجر الجودة"
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    env:
+      DB_SERVER: ${{ secrets.DB_SERVER }}
+      DB_PORT: "1433"
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_ENCRYPT: "true"
+      DB_TRUST_SERVER_CERT: "true"
+      COMPANY_NAME: ${{ inputs.company_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --workspace backend --include-workspace-root=false
+      - run: npm run seed:services -w backend
