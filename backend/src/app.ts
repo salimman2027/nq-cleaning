@@ -8,7 +8,7 @@ import swaggerUi from 'swagger-ui-express';
 import { config } from './config';
 import { query } from './db';
 import { errorHandler, h, HttpError } from './errors';
-import { authenticate } from './auth/middleware';
+import { authenticate, requireApprovedCompany } from './auth/middleware';
 import { authRouter } from './routes/auth';
 import { customersRouter } from './routes/customers';
 import { servicesRouter } from './routes/services';
@@ -17,6 +17,10 @@ import { bookingsRouter } from './routes/bookings';
 import { dashboardRouter } from './routes/dashboard';
 import { usersRouter } from './routes/users';
 import { branchesRouter } from './routes/branches';
+import { onboardingRouter } from './routes/onboarding';
+import { companyRouter } from './routes/company';
+import { platformRouter } from './routes/platform';
+import { marketRouter } from './routes/market';
 import { openapi } from './openapi';
 
 export function createApp(): express.Express {
@@ -41,13 +45,17 @@ export function createApp(): express.Express {
     res.json({ status: 'ok' });
   }));
   api.use('/auth', authRouter);
-  api.use('/customers', authenticate, customersRouter);
-  api.use('/services', authenticate, servicesRouter);
-  api.use('/technicians', authenticate, techniciansRouter);
-  api.use('/bookings', authenticate, bookingsRouter);
-  api.use('/dashboard', authenticate, dashboardRouter);
-  api.use('/users', authenticate, usersRouter);
-  api.use('/branches', authenticate, branchesRouter);
+  api.use('/onboarding', onboardingRouter);
+  api.use('/market', marketRouter);
+  api.use('/company', authenticate, companyRouter);
+  api.use('/platform', authenticate, platformRouter);
+  api.use('/customers', authenticate, requireApprovedCompany, customersRouter);
+  api.use('/services', authenticate, requireApprovedCompany, servicesRouter);
+  api.use('/technicians', authenticate, requireApprovedCompany, techniciansRouter);
+  api.use('/bookings', authenticate, requireApprovedCompany, bookingsRouter);
+  api.use('/dashboard', authenticate, requireApprovedCompany, dashboardRouter);
+  api.use('/users', authenticate, requireApprovedCompany, usersRouter);
+  api.use('/branches', authenticate, requireApprovedCompany, branchesRouter);
   api.use((_req, _res, next) => next(new HttpError(404, 'NOT_FOUND', 'Route not found')));
 
   // Docs must be mounted before the API router, whose catch-all 404 would otherwise swallow /api/docs.

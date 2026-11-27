@@ -9,7 +9,9 @@
     "start": "node dist/server.js",
     "migrate": "tsx src/scripts/migrate.ts",
     "bootstrap": "tsx src/scripts/bootstrap.ts",
-    "test": "tsx --test \"src/**/*.test.ts\""
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "bootstrap:platform": "tsx src/scripts/bootstrap-platform.ts",
+    "seed:demo": "tsx src/scripts/seed-demo.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

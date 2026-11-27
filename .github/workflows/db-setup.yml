@@ -32,4 +32,4 @@ jobs:
         with: { node-version: 22 }
       - run: npm install --workspace backend --include-workspace-root=false
       - run: npm run migrate -w backend
-      - run: npm run bootstrap -w backend
+      - run: npm run bootstrap:platform -w backend

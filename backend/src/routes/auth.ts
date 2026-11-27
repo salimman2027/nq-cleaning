@@ -8,6 +8,9 @@ import { query, withTx } from '../db';
 import { HttpError, h, parse } from '../errors';
 import { authenticate, signAccess } from '../auth/middleware';
 import type { AuthUser } from '../types';
+import { normalizeMobile } from '../lib/phone';
+import { isSaudiMobile } from '../lib/otp';
+import { requestOtp, verifyOtp } from '../services/otp';
 
 export const authRouter = Router();
 
@@ -15,7 +18,7 @@ const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 // Used to keep response time similar when the e-mail does not exist.
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
 
-async function loadPerms(userId: number, tx?: import('mssql').Transaction): Promise<string[]> {
+export async function loadPerms(userId: number, tx?: import('mssql').Transaction): Promise<string[]> {
   const rows = await query<{ Code: string }>(
     `SELECT DISTINCT p.Code FROM UserRoles ur
      JOIN RolePermissions rp ON rp.RoleId = ur.RoleId
@@ -27,7 +30,7 @@ async function loadPerms(userId: number, tx?: import('mssql').Transaction): Prom
   return rows.map((r) => r.Code);
 }
 
-async function issueRefresh(userId: number, tx: import('mssql').Transaction): Promise<{ token: string; id: number }> {
+export async function issueRefresh(userId: number, tx: import('mssql').Transaction): Promise<{ token: string; id: number }> {
   const token = randomBytes(48).toString('base64url');
   const rows = await query<{ Id: number }>(
     `INSERT INTO RefreshTokens (UserId, TokenHash, ExpiresAt)
@@ -135,5 +138,57 @@ authRouter.get(
     const u = req.user!;
     const rows = await query(`SELECT Id, FullName, Email, BranchId FROM Users WHERE Id = @i AND CompanyId = @c`, { i: u.id, c: u.companyId });
     res.json({ ...rows[0], perms: u.perms });
+  }),
+);
+
+/** Opens a session (access + refresh token) for an already-verified user. */
+export async function createSession(userId: number) {
+  const rows = await query<{ Id: number; CompanyId: number; BranchId: number | null; FullName: string }>(
+    `SELECT Id, CompanyId, BranchId, FullName FROM Users WHERE Id=@u AND IsActive=1 AND IsDeleted=0`,
+    { u: userId },
+  );
+  const u = rows[0];
+  if (!u) throw new HttpError(401, 'BAD_CREDENTIALS', 'Account not available');
+  const perms = await loadPerms(u.Id);
+  const user: AuthUser = { id: u.Id, companyId: u.CompanyId, branchId: u.BranchId, perms };
+  const refresh = await withTx((tx) => issueRefresh(user.id, tx));
+  return {
+    accessToken: signAccess(user),
+    refreshToken: refresh.token,
+    user: { id: user.id, name: u.FullName, companyId: user.companyId, branchId: user.branchId, perms },
+  };
+}
+
+const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 15, standardHeaders: true, legacyHeaders: false, skip: () => process.env.NODE_ENV === 'test' });
+const phoneSchema = z.string().min(9).max(20).transform(normalizeMobile).refine(isSaudiMobile, 'Invalid mobile number');
+
+/** Always answers 200 so the endpoint cannot be used to discover which numbers have accounts. */
+authRouter.post(
+  '/otp/request',
+  otpLimiter,
+  h(async (req, res) => {
+    const { phone } = parse(z.object({ phone: phoneSchema }), req.body);
+    const u = await query(`SELECT TOP 1 Id FROM Users WHERE Phone=@p AND IsActive=1 AND IsDeleted=0`, { p: phone });
+    let devCode: string | undefined;
+    if (u[0]) {
+      try {
+        devCode = (await requestOtp(phone, 'login', req.ip ?? null)).devCode;
+      } catch (e) {
+        if (!(e instanceof HttpError && e.status === 429)) throw e; // do not reveal that the number has an account
+      }
+    }
+    res.json({ sent: true, ...(devCode ? { devCode } : {}) });
+  }),
+);
+
+authRouter.post(
+  '/otp/verify',
+  otpLimiter,
+  h(async (req, res) => {
+    const b = parse(z.object({ phone: phoneSchema, code: z.string().regex(/^\d{6}$/) }), req.body);
+    await verifyOtp(b.phone, 'login', b.code);
+    const u = (await query<{ Id: number }>(`SELECT TOP 1 Id FROM Users WHERE Phone=@p AND IsActive=1 AND IsDeleted=0`, { p: b.phone }))[0];
+    if (!u) throw new HttpError(400, 'OTP_INVALID', 'Invalid or expired code');
+    res.json(await createSession(u.Id));
   }),
 );
