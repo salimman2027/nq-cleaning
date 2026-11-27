@@ -14,6 +14,7 @@ interface Doc { kind: 'cr' | 'vat' | 'address'; fileName: string; mimeType: stri
 const KINDS = ['cr', 'vat', 'address'] as const;
 const EMPTY: Addr = { buildingNo: '', street: '', district: '', city: '', postalCode: '', additionalNo: '' };
 
+const dictKeys: Record<string, true> = Object.fromEntries(['INCOMPLETE', 'COMPANY_LOCKED', 'LEGAL_FIELDS_LOCKED', 'CR_TAKEN', 'FILE_TOO_LARGE', 'UNSUPPORTED_FILE', 'VALIDATION_ERROR', 'BAD_STATE', 'EMPTY_FILE'].map((c) => [`err_${c}`, true]));
 const MISSING: Record<string, Key> = { name: 'companyName', crNumber: 'cr', vatNumber: 'vat', nationalAddress: 'natAddr', sectors: 'sectors', 'doc:cr': 'doc_cr', 'doc:vat': 'doc_vat', 'doc:address': 'doc_address' };
 
 export default function Company() {
@@ -39,7 +40,7 @@ export default function Company() {
 
   const act = async (fn: () => Promise<Profile>) => {
     setBusy(true); setError(''); setMsg('');
-    try { apply(await fn()); await reload(); setMsg(t('saved')); } catch (e) { setError(e instanceof ApiError ? `${e.message}${Array.isArray((e.details as { missing?: string[] })?.missing) ? ': ' + lab((e.details as { missing: string[] }).missing) : ''}` : 'Error'); } finally { setBusy(false); }
+    try { apply(await fn()); await reload(); setMsg(t('saved')); } catch (e) { setError(e instanceof ApiError ? `${t((`err_${e.code}` in dictKeys ? `err_${e.code}` : 'err_VALIDATION_ERROR') as Key)}${Array.isArray((e.details as { missing?: string[] })?.missing) ? ': ' + lab((e.details as { missing: string[] }).missing) : ''}` : 'Error'); } finally { setBusy(false); }
   };
   const save = () => act(() => api<Profile>('/company', { method: 'PUT', body: {
     name: form.name, slug: form.slug, description: form.description || null, logoUrl: form.logoUrl.trim() || null, coverUrl: form.coverUrl.trim() || null, primaryColor: form.primaryColor || null,
