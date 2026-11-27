@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, hasTokens, saveTokens } from './api';
 
-export interface Me { Id: number; FullName: string; Email: string; BranchId: number | null; perms: string[] }
-interface Ctx { me: Me | null; ready: boolean; login: (email: string, password: string) => Promise<void>; logout: () => Promise<void>; can: (p: string) => boolean }
+export interface Me { Id: number; FullName: string; Email: string; BranchId: number | null; CompanyName: string; CompanyStatus: string; IsPlatform: boolean; perms: string[] }
+interface Ctx { me: Me | null; ready: boolean; login: (email: string, password: string) => Promise<void>; adopt: (tokens: { accessToken: string; refreshToken: string }) => Promise<void>; reload: () => Promise<void>; logout: () => Promise<void>; can: (p: string) => boolean }
 const AuthCtx = createContext<Ctx>(null as unknown as Ctx);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -28,6 +28,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMe(await api<Me>('/auth/me'));
   }, []);
 
+  const adopt = useCallback(async (tk: { accessToken: string; refreshToken: string }) => {
+    saveTokens({ accessToken: tk.accessToken, refreshToken: tk.refreshToken });
+    setMe(await api<Me>('/auth/me'));
+  }, []);
+  const reload = useCallback(async () => { setMe(await api<Me>('/auth/me')); }, []);
+
   const logout = useCallback(async () => {
     try {
       const raw = localStorage.getItem('nq.tokens');
@@ -37,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMe(null);
   }, []);
 
-  const value = useMemo<Ctx>(() => ({ me, ready, login, logout, can: (p) => !!me?.perms.includes(p) }), [me, ready, login, logout]);
+  const value = useMemo<Ctx>(() => ({ me, ready, login, adopt, reload, logout, can: (p) => !!me?.perms.includes(p) }), [me, ready, login, adopt, reload, logout]);
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }
 

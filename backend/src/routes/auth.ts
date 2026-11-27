@@ -136,7 +136,11 @@ authRouter.get(
   authenticate,
   h(async (req, res) => {
     const u = req.user!;
-    const rows = await query(`SELECT Id, FullName, Email, BranchId FROM Users WHERE Id = @i AND CompanyId = @c`, { i: u.id, c: u.companyId });
+    const rows = await query(
+      `SELECT u.Id, u.FullName, u.Email, u.BranchId, c.Name AS CompanyName, c.Status AS CompanyStatus, c.IsPlatform
+         FROM Users u JOIN Companies c ON c.Id = u.CompanyId WHERE u.Id = @i AND u.CompanyId = @c`,
+      { i: u.id, c: u.companyId },
+    );
     res.json({ ...rows[0], perms: u.perms });
   }),
 );
