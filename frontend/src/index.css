@@ -50,3 +50,23 @@ h1, h2, h3 { text-wrap: balance; }
   .dark { color-scheme: light; }
   @page { size: A4; margin: 12mm; }
 }
+
+/* One look for every data table: navy header, amber rule, zebra rows, hover. Lives in the components layer so utility classes still win. */
+@layer components {
+  main table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: .875rem; }
+  main thead th { background: var(--color-cyan-900); color: #fff; font-weight: 600; font-size: .8rem; padding: .8rem 1rem; white-space: nowrap; border-bottom: 3px solid var(--color-accent); }
+  main thead th:first-child { border-start-start-radius: .75rem; }
+  main thead th:last-child { border-start-end-radius: .75rem; }
+  main tbody td { padding: .75rem 1rem; border-top: 1px solid #e8edf4; vertical-align: middle; }
+  main tbody tr:nth-child(even) > td { background: #f3f6fb; }
+  main tbody tr:hover > td { background: #e4edff; }
+  main tbody td:first-child { font-weight: 600; }
+  .dark main thead th { background: #0b1f45; }
+  .dark main tbody td { border-top-color: #1e293b; }
+  .dark main tbody tr:nth-child(even) > td { background: #0f1b33; }
+  .dark main tbody tr:hover > td { background: #172a4d; }
+}
+@media print {
+  main thead th { background: #0a2552 !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  main tbody tr:nth-child(even) > td { background: #f3f6fb !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
