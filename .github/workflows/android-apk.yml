@@ -2,9 +2,9 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ["frontend/**", ".github/workflows/android-apk.yml"]
+  
+permissions:
+  contents: write
 
 jobs:
   apk:
@@ -24,7 +24,7 @@ jobs:
         env:
           # Public HTTPS URL of the backend, e.g. https://api.example.com/api
           # Set it in GitHub: Settings > Secrets and variables > Actions > Variables > API_URL
-          VITE_API_URL: ${{ vars.API_URL }}
+          VITE_API_URL: ${{ vars.API_URL || 'https://nq-cleaning.premiumasp.net/api' }}
         run: |
           if [ -z "$VITE_API_URL" ]; then echo "::warning::API_URL variable is not set; the APK will call /api on its own origin and cannot reach a server."; fi
           npm run build
@@ -39,8 +39,10 @@ jobs:
         working-directory: frontend/android
         run: ./gradlew assembleDebug --no-daemon
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: nq-cleaning-debug-apk
-          path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+      - name: Publish the APK as a public release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk faz3tak.apk
+          gh release view app-latest >/dev/null 2>&1 || gh release create app-latest --title "Faz3tak Android app" --notes "Debug-signed APK for direct install. Enable installing from this source on the phone." --latest=false
+          gh release upload app-latest faz3tak.apk --clobber

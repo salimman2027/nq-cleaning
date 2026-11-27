@@ -160,13 +160,46 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).put('/api/company').set(auth(ownerToken)).send({ coverUrl: 'http://example.test/c.jpg' })).status, 400);
   });
 
+  test('customer account: cash order, in-app notice on confirmation, cards refused, tokens not interchangeable', async () => {
+    const { query } = await import('../db');
+    const svc = (await query<{ Id: number }>(`SELECT TOP 1 Id FROM Services WHERE CompanyId=@c AND IsDeleted=0 ORDER BY Id`, { c: companyId }))[0].Id;
+    await query(`INSERT INTO ServicePrices (ServiceId, Price, Unit, ValidFrom) VALUES (@s, 120, 'visit', '2020-01-01')`, { s: svc });
+    const day = new Date(Date.now() + 4 * 86400_000 + 3 * 3600_000).toISOString().slice(0, 10);
+    const reg = await request(app).post('/api/shop/register').send({ name: 'Sara Ali', phone: '0561112233', password: 'Passw0rd!x' });
+    assert.equal(reg.status, 201);
+    const tok = reg.body.token as string;
+    assert.equal((await request(app).post('/api/shop/register').send({ name: 'Sara Ali', phone: '0561112233', password: 'Passw0rd!x' })).status, 409);
+    assert.equal((await request(app).post('/api/shop/login').send({ phone: '0561112233', password: 'wrong-pass-1' })).status, 401);
+    assert.equal((await request(app).get('/api/shop/me').set(auth(ownerToken))).status, 401, 'staff token is not a customer token');
+    assert.equal((await request(app).get('/api/customers').set(auth(tok))).status, 401, 'customer token is not a staff token');
+    const order = { slug: 'clean-co', items: [{ serviceId: svc, qty: 2 }], date: day, period: 'morning', address: 'Riyadh, Al Olaya', paymentMethod: 'cash' };
+    assert.equal((await request(app).post('/api/shop/orders').send(order)).status, 401);
+    assert.equal((await request(app).post('/api/shop/orders').set(auth(tok)).send({ ...order, paymentMethod: 'card' })).status, 400);
+    const ok = await request(app).post('/api/shop/orders').set(auth(tok)).send(order);
+    assert.equal(ok.status, 201);
+    assert.equal(ok.body.total, 240, 'price comes from the server');
+    assert.equal((await request(app).get('/api/shop/me').set(auth(tok))).body.unseen, 0);
+    const reqs = await request(app).get('/api/requests').set(auth(ownerToken));
+    const mine = reqs.body.items.find((r: { Id: number }) => r.Id === ok.body.id);
+    assert.equal(mine.Items.length, 1);
+    assert.equal((await request(app).patch(`/api/requests/${ok.body.id}`).set(auth(ownerToken)).send({ status: 'confirmed' })).status, 200);
+    assert.equal((await request(app).get('/api/shop/me').set(auth(tok))).body.unseen, 1);
+    const list = await request(app).get('/api/shop/orders').set(auth(tok));
+    assert.equal(list.body.items.length, 1);
+    assert.equal(list.body.items[0].Unseen, 1);
+    assert.equal((await request(app).post('/api/shop/orders/seen').set(auth(tok))).status, 200);
+    assert.equal((await request(app).get('/api/shop/me').set(auth(tok))).body.unseen, 0);
+    const co = await request(app).post(`/api/shop/orders/${ok.body.id}/complaints`).set(auth(tok)).send({ message: 'The team did not show up on time.' });
+    assert.equal(co.status, 201);
+  });
+
   test('platform monitor counts activity per period; complaints reach the platform only', async () => {
     for (const period of ['day', 'week', 'month']) {
       const m = await request(app).get(`/api/platform/monitor?period=${period}`).set(auth(platToken));
       assert.equal(m.status, 200);
       const row = m.body.companies.find((c: { Id: number }) => c.Id === companyId);
       assert.ok(row, 'company listed');
-      assert.equal(Number(row.Requests), 1);
+      assert.equal(Number(row.Requests), 2);
       assert.equal(m.body.totals.requests >= 1, true);
     }
     assert.equal((await request(app).get('/api/platform/monitor?period=year').set(auth(platToken))).status, 400);

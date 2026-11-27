@@ -3,7 +3,7 @@ import { query } from '../db';
 import { HttpError } from '../errors';
 import { toInternational } from '../lib/otp';
 
-export type Template = 'otp' | 'company_approved' | 'company_rejected';
+export type Template = 'otp' | 'company_approved' | 'company_rejected' | 'order_confirmed';
 
 async function log(companyId: number | null, phone: string, channel: string, template: string, status: string, error?: string) {
   // Never store message parameters (they may contain one-time codes).
@@ -29,7 +29,7 @@ export async function send(phone: string, template: Template, params: string[], 
     return;
   }
   if (!deliveryConfigured()) throw new HttpError(503, 'NOTIFY_NOT_CONFIGURED', 'Message delivery is not configured');
-  const name = { otp: config.notify.otpTemplate, company_approved: config.notify.approvedTemplate, company_rejected: config.notify.rejectedTemplate }[template];
+  const name = { otp: config.notify.otpTemplate, company_approved: config.notify.approvedTemplate, company_rejected: config.notify.rejectedTemplate, order_confirmed: config.notify.orderConfirmedTemplate }[template];
   const components: unknown[] = [{ type: 'body', parameters: params.map((text) => ({ type: 'text', text })) }];
   // Authentication templates carry the code in a copy-code button as well.
   if (template === 'otp') components.push({ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: params[0] }] });

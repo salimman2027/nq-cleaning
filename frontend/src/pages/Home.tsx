@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useAuth } from '../auth';
 import { useShop } from '../shop';
 import { LogoMark } from '../Logo';
+import { AndroidBanner } from '../AndroidBanner';
 import { ZoomControl } from '../ui';
 import { useI18n } from '../i18n';
 import { SectorIcon } from '../sectorIcons';
@@ -32,6 +33,12 @@ export function PublicShell({ children, flush = false }: { children: ReactNode; 
             {!me && !customer && <Link to="/join" className="hidden rounded-lg px-3 py-2 text-white/85 hover:bg-white/10 sm:block">{t('joinAsCompany')}</Link>}
             {me && <Link to="/app" className="rounded-lg bg-white px-4 py-2 font-medium text-cyan-900 hover:bg-cyan-50">{t('company')}</Link>}
             {!me && !customer && <Link to="/login" className="rounded-lg bg-white px-4 py-2 font-medium text-cyan-900 hover:bg-cyan-50">{t('companyLogin')}</Link>}
+            {customer && (customer.unseen ?? 0) > 0 && (
+              <Link to="/account" aria-label={t('notifications')} className="relative rounded-lg px-2.5 py-2 text-white/90 hover:bg-white/10">
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 17h12l-1.500-2.500V10a4.500 4.500 0 0 0-9 0v4.500z" /><path d="M10 20a2 2 0 0 0 4 0" /></svg>
+                <span className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{customer.unseen}</span>
+              </Link>
+            )}
             <Link to="/cart" aria-label={t('cart')} className="relative rounded-lg px-2.5 py-2 text-white/90 hover:bg-white/10">
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 4h2l2.2 10.2a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L20 8H6.200" /><circle cx="9" cy="19" r="1.300" /><circle cx="17" cy="19" r="1.300" /></svg>
               {count > 0 && <span className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-accent)] px-1 text-[10px] font-bold text-cyan-950">{count}</span>}
@@ -49,6 +56,7 @@ export function PublicShell({ children, flush = false }: { children: ReactNode; 
         </div>
         {!flush && <div className="h-0" />}
       </header>
+      <AndroidBanner />
       {children}
     </div>
   );

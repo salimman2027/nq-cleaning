@@ -37,6 +37,7 @@ export const config = {
     otpTemplate: process.env.WHATSAPP_OTP_TEMPLATE ?? 'nq_otp',
     approvedTemplate: process.env.WHATSAPP_APPROVED_TEMPLATE ?? 'nq_company_approved',
     rejectedTemplate: process.env.WHATSAPP_REJECTED_TEMPLATE ?? 'nq_company_rejected',
+    orderConfirmedTemplate: process.env.WHATSAPP_ORDER_CONFIRMED_TEMPLATE ?? 'faz3tak_order_confirmed',
   },
   travelBufferMinutes: Number(process.env.TRAVEL_BUFFER_MINUTES ?? 30),
   db: {

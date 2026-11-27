@@ -36,7 +36,7 @@ export function createApp(): express.Express {
   app.use(
     cors({
       origin: (origin, cb) => {
-        if (!origin || config.corsOrigins.includes(origin)) return cb(null, true);
+        if (!origin || config.corsOrigins.includes(origin) || origin === 'https://localhost' || origin === 'capacitor://localhost') return cb(null, true);
         cb(null, false);
       },
     }),

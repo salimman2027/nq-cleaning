@@ -4,6 +4,7 @@ import { query } from '../db';
 import { HttpError, h, parse } from '../errors';
 import { requirePerm } from '../auth/middleware';
 import { backfillConfirmed, bookFromRequest } from '../services/requestSync';
+import { send } from '../services/notify';
 
 /** Booking requests received from the public storefront, for the company's own staff. */
 export const requestsRouter = Router();
@@ -46,6 +47,13 @@ requestsRouter.patch(
     const r = await query(`UPDATE BookingRequests SET Status=@s, UpdatedAt=SYSUTCDATETIME() OUTPUT inserted.Id WHERE Id=@i AND CompanyId=@c`, { s: status, i: id, c: req.user!.companyId });
     if (!r.length) throw new HttpError(404, 'NOT_FOUND', 'Request not found');
     const bookingId = status === 'confirmed' ? await bookFromRequest(req.user!.companyId, id, req.user!.id) : null;
-    res.json({ id, status, bookingId });
+    let notified = false;
+    if (status === 'confirmed') {
+      // Best effort: a failed message must never undo the confirmation. The customer also sees an in-app notice.
+      const info = (await query<{ Phone: string; CustomerName: string; PreferredDate: Date; Company: string }>(
+        `SELECT r.Phone, r.CustomerName, r.PreferredDate, c.Name AS Company FROM BookingRequests r JOIN Companies c ON c.Id=r.CompanyId WHERE r.Id=@i`, { i: id }))[0];
+      if (info) notified = await send(info.Phone, 'order_confirmed', [info.CustomerName, info.Company, new Date(info.PreferredDate).toISOString().slice(0, 10)], req.user!.companyId).then(() => true, () => false);
+    }
+    res.json({ id, status, bookingId, notified });
   }),
 );

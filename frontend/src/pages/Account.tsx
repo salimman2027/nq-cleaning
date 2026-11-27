@@ -7,11 +7,11 @@ import { Button, ErrorBox, Field, Input, PasswordInput, money, Skeleton } from '
 import ComplaintForm from './ComplaintForm';
 import { PublicShell } from './Home';
 
-interface Order { Id: number; Status: string; PaymentMethod: string; PaymentStatus: string; Total: number | null; PreferredDate: string; PreferredPeriod: string; CompanyName: string; Slug: string; CreatedAt: string; Items: { Name: string; Qty: number; UnitPrice: number }[] }
+interface Order { Unseen?: number; Id: number; Status: string; PaymentMethod: string; PaymentStatus: string; Total: number | null; PreferredDate: string; PreferredPeriod: string; CompanyName: string; Slug: string; CreatedAt: string; Items: { Name: string; Qty: number; UnitPrice: number }[] }
 
 export default function Account() {
   const { t, lang } = useI18n();
-  const { customer, ready, login, register, logout } = useShop();
+  const { customer, ready, login, register, logout, refresh } = useShop();
   const nav = useNavigate();
   const [mode, setMode] = useState<'login' | 'register'>(new URLSearchParams(location.search).get('mode') === 'register' ? 'register' : 'login');
   const [f, setF] = useState({ name: '', phone: '', password: '' });
@@ -19,7 +19,7 @@ export default function Account() {
   const [busy, setBusy] = useState(false);
   const [complain, setComplain] = useState<Order | null>(null);
   const [orders, setOrders] = useState<Order[] | null>(null);
-  useEffect(() => { if (customer) api<{ items: Order[] }>('/shop/orders', { customer: true }).then((r) => setOrders(r.items)).catch(() => setErr('Error')); }, [customer]);
+  useEffect(() => { if (customer) api<{ items: Order[] }>('/shop/orders', { customer: true }).then((r) => { setOrders(r.items); if (r.items.some((o) => o.Unseen)) api('/shop/orders/seen', { method: 'POST', customer: true }).then(refresh).catch(() => undefined); }).catch(() => setErr('Error')); }, [customer]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setErr('');
@@ -60,6 +60,11 @@ export default function Account() {
         </div>
         <h2 className="font-semibold">{t('myOrders')}</h2>
         {err && <ErrorBox message={err} />}
+        {orders?.filter((o) => o.Unseen).map((o) => (
+          <div key={o.Id} role="status" className={`rise rounded-2xl p-4 text-sm font-medium ${o.Status === 'cancelled' ? 'bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200' : 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'}`}>
+            {t(`notice_${o.Status}` as Key)} · #{o.Id} · {o.CompanyName}
+          </div>
+        ))}
         {!orders ? <Skeleton rows={3} /> : orders.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center dark:border-slate-700"><p>{t('noOrders')}</p><Link to="/" className="mt-3 inline-block rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white">{t('browseStores')}</Link></div>
         ) : orders.map((o) => (

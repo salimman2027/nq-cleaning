@@ -52,7 +52,8 @@ shopRouter.post('/login', limiter, h(async (req, res) => {
 shopRouter.get('/me', customerAuth, h(async (req, res) => {
   const c = (await query<{ Id: number; Name: string; Phone: string }>(`SELECT Id, Name, Phone FROM MarketplaceCustomers WHERE Id=@i AND IsDeleted=0`, { i: req.customerId }))[0];
   if (!c) throw new HttpError(401, 'INVALID_TOKEN', 'Account not found');
-  res.json({ id: Number(c.Id), name: c.Name, phone: c.Phone });
+  const u = await query<{ N: number }>(`SELECT COUNT(*) AS N FROM BookingRequests WHERE CustomerId=@i AND Status IN ('contacted','confirmed','cancelled') AND ISNULL(CustomerSeenStatus,'new')<>Status`, { i: req.customerId });
+  res.json({ id: Number(c.Id), name: c.Name, phone: c.Phone, unseen: Number(u[0].N) });
 }));
 
 const orderSchema = z.object({
@@ -101,7 +102,8 @@ shopRouter.post('/orders', customerAuth, h(async (req, res) => {
 
 shopRouter.get('/orders', customerAuth, h(async (req, res) => {
   const rows = await query<Record<string, any>>(
-    `SELECT r.Id, r.Status, r.PaymentMethod, r.PaymentStatus, r.Total, r.PreferredDate, r.PreferredPeriod, r.Address, r.CreatedAt, c.Name AS CompanyName, c.Slug
+    `SELECT r.Id, r.Status, r.PaymentMethod, r.PaymentStatus, r.Total, r.PreferredDate, r.PreferredPeriod, r.Address, r.CreatedAt, c.Name AS CompanyName, c.Slug,
+            CASE WHEN r.Status IN ('contacted','confirmed','cancelled') AND ISNULL(r.CustomerSeenStatus,'new')<>r.Status THEN 1 ELSE 0 END AS Unseen
        FROM BookingRequests r JOIN Companies c ON c.Id=r.CompanyId WHERE r.CustomerId=@i ORDER BY r.CreatedAt DESC`, { i: req.customerId });
   const items = rows.length ? await query<Record<string, any>>(`SELECT RequestId, Name, UnitPrice, Qty FROM BookingRequestItems WHERE RequestId IN (SELECT Id FROM BookingRequests WHERE CustomerId=@i)`, { i: req.customerId }) : [];
   res.json({ items: rows.map((r) => ({ ...r, Items: items.filter((x) => x.RequestId === r.Id) })) });
@@ -115,4 +117,10 @@ shopRouter.post('/orders/:id/complaints', customerAuth, h(async (req, res) => {
   if (!o) throw new HttpError(404, 'NOT_FOUND', 'Order not found');
   const r = await query<{ Id: number }>(`INSERT INTO Complaints (CompanyId, RequestId, CustomerId, CustomerName, Phone, Message) OUTPUT inserted.Id VALUES (@co,@r,@cu,@n,@p,@m)`, { co: o.CompanyId, r: id, cu: req.customerId, n: o.CustomerName, p: o.Phone, m: b.message });
   res.status(201).json({ id: r[0].Id });
+}));
+
+/** The customer has looked at the status changes. */
+shopRouter.post('/orders/seen', customerAuth, h(async (req, res) => {
+  await query(`UPDATE BookingRequests SET CustomerSeenStatus=Status WHERE CustomerId=@c AND (CustomerSeenStatus IS NULL OR CustomerSeenStatus<>Status)`, { c: req.customerId });
+  res.json({ ok: true });
 }));

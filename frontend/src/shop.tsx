@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, customerToken, saveCustomerToken } from './api';
 
-export interface Customer { id: number; name: string; phone: string }
+export interface Customer { id: number; name: string; phone: string; unseen?: number }
 export interface CartItem { serviceId: number; name: string; price: number; qty: number; image: string | null }
 export interface Cart { slug: string; company: string; items: CartItem[] }
 
@@ -10,6 +10,7 @@ interface Ctx {
   login(phone: string, password: string): Promise<void>;
   register(name: string, phone: string, password: string): Promise<void>;
   logout(): void;
+  refresh(): void;
   cart: Cart | null;
   add(slug: string, company: string, item: Omit<CartItem, 'qty'>): 'added' | 'other-company';
   replaceWith(slug: string, company: string, item: Omit<CartItem, 'qty'>): void;
@@ -32,10 +33,12 @@ export function ShopProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!customerToken()) { setReady(true); return; }
-    api<Customer>('/shop/me', { customer: true }).then(setCustomer).catch(() => saveCustomerToken(null)).finally(() => setReady(true));
+    const load = () => api<Customer>('/shop/me', { customer: true }).then(setCustomer);
+    load().catch(() => saveCustomerToken(null)).finally(() => setReady(true));
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible' && customerToken()) load().catch(() => undefined); }, 60_000);
     const off = () => { saveCustomerToken(null); setCustomer(null); };
     window.addEventListener('nq:customer-logout', off);
-    return () => window.removeEventListener('nq:customer-logout', off);
+    return () => { window.removeEventListener('nq:customer-logout', off); window.clearInterval(timer); };
   }, []);
   useEffect(() => { try { if (cart && cart.items.length) localStorage.setItem(CART_KEY, JSON.stringify(cart)); else localStorage.removeItem(CART_KEY); } catch { /* ignore */ } }, [cart]);
 
@@ -49,6 +52,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     login: (phone, password) => session('/shop/login', { phone, password }),
     register: (name, phone, password) => session('/shop/register', { name, phone, password }),
     logout: () => { saveCustomerToken(null); setCustomer(null); },
+    refresh: () => { if (customerToken()) api<Customer>('/shop/me', { customer: true }).then(setCustomer).catch(() => undefined); },
     cart,
     add: (slug, company, item) => {
       if (cart && cart.slug !== slug && cart.items.length) return 'other-company';
