@@ -28,8 +28,9 @@ export function PublicShell({ children, flush = false }: { children: ReactNode; 
             <span>{t('app')}</span>
           </Link>
           <nav className="flex items-center gap-2 text-sm">
-            <Link to="/join" className="hidden rounded-lg px-3 py-2 text-white/85 hover:bg-white/10 sm:block">{t('joinAsCompany')}</Link>
-            <Link to={me ? '/app' : '/login'} className="rounded-lg bg-white px-4 py-2 font-medium text-cyan-900 hover:bg-cyan-50">{me ? t('company') : t('companyLogin')}</Link>
+            {!me && !customer && <Link to="/join" className="hidden rounded-lg px-3 py-2 text-white/85 hover:bg-white/10 sm:block">{t('joinAsCompany')}</Link>}
+            {me && <Link to="/app" className="rounded-lg bg-white px-4 py-2 font-medium text-cyan-900 hover:bg-cyan-50">{t('company')}</Link>}
+            {!me && !customer && <Link to="/login" className="rounded-lg bg-white px-4 py-2 font-medium text-cyan-900 hover:bg-cyan-50">{t('companyLogin')}</Link>}
             <Link to="/cart" aria-label={t('cart')} className="relative rounded-lg px-2.5 py-2 text-white/90 hover:bg-white/10">
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 4h2l2.2 10.2a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L20 8H6.200" /><circle cx="9" cy="19" r="1.300" /><circle cx="17" cy="19" r="1.300" /></svg>
               {count > 0 && <span className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-accent)] px-1 text-[10px] font-bold text-cyan-950">{count}</span>}
