@@ -13,6 +13,7 @@ export default function Register() {
   const { adopt } = useAuth();
   const nav = useNavigate();
   const [step, setStep] = useState<1 | 2>(1);
+  const [needCode, setNeedCode] = useState(true);
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [devCode, setDevCode] = useState('');
@@ -22,7 +23,10 @@ export default function Register() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { api<{ items: Sector[] }>('/market/sectors').then((r) => setSectors(r.items)).catch(() => undefined); }, []);
+  useEffect(() => {
+    api<{ items: Sector[] }>('/market/sectors').then((r) => setSectors(r.items)).catch(() => undefined);
+    api<{ phoneVerification: boolean }>('/market/config').then((r) => { setNeedCode(r.phoneVerification); if (!r.phoneVerification) setStep(2); }).catch(() => undefined);
+  }, []);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -35,7 +39,7 @@ export default function Register() {
     setStep(2);
   }); };
   const register = (e: FormEvent) => { e.preventDefault(); void run(async () => {
-    const r = await api<{ accessToken: string; refreshToken: string }>('/onboarding/register', { method: 'POST', body: { phone, code, ...f, sectorCodes: picked } });
+    const r = await api<{ accessToken: string; refreshToken: string }>('/onboarding/register', { method: 'POST', body: { phone, ...(needCode ? { code } : {}), ...f, sectorCodes: picked } });
     await adopt(r);
     nav('/app/company', { replace: true });
   }); };
@@ -45,7 +49,7 @@ export default function Register() {
     <PublicShell>
       <div className="mx-auto my-8 max-w-md rounded-2xl bg-white p-6 shadow-md ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
         <h1 className="mb-1 text-xl font-bold">{t('registerTitle')}</h1>
-        <p className="mb-4 text-xs text-slate-500">{t('step')} {step}/2</p>
+        {needCode && <p className="mb-4 text-xs text-slate-500">{t('step')} {step}/2</p>}
         {error && <div className="mb-3"><ErrorBox message={error} /></div>}
         {step === 1 ? (
           <form onSubmit={sendCode} className="space-y-4">
@@ -54,7 +58,8 @@ export default function Register() {
           </form>
         ) : (
           <form onSubmit={register} className="space-y-3">
-            <Field label={t('otpCode')}><Input inputMode="numeric" maxLength={6} required value={code} onChange={(e) => setCode(e.target.value)} /></Field>
+            {!needCode && <Field label={`${t('mobile')} — ${t('mobileHint')}`}><Input inputMode="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} /></Field>}
+            {needCode && <Field label={t('otpCode')}><Input inputMode="numeric" maxLength={6} required value={code} onChange={(e) => setCode(e.target.value)} /></Field>}
             {devCode && <p className="rounded bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">{t('devCodeNote')}: <b>{devCode}</b></p>}
             <Field label={t('companyName')}><Input required value={f.companyName} onChange={(e) => setF({ ...f, companyName: e.target.value })} /></Field>
             <Field label={t('ownerName')}><Input required value={f.ownerName} onChange={(e) => setF({ ...f, ownerName: e.target.value })} /></Field>

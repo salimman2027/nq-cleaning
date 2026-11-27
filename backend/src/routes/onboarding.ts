@@ -3,6 +3,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
+import { config } from '../config';
 import { query, withTx } from '../db';
 import { HttpError, h, parse } from '../errors';
 import { isSaudiMobile } from '../lib/otp';
@@ -35,6 +36,7 @@ onboardingRouter.post(
   h(async (req, res) => {
     const { phone } = parse(z.object({ phone: phoneSchema }), req.body);
     await assertFree(phone);
+    if (!config.otp.required) return void res.json({ sent: false, required: false });
     const out = await requestOtp(phone, 'company_register', req.ip ?? null);
     res.json({ sent: true, ...out });
   }),
@@ -47,7 +49,7 @@ onboardingRouter.post(
     const b = parse(
       z.object({
         phone: phoneSchema,
-        code: z.string().regex(/^\d{6}$/),
+        code: z.string().regex(/^\d{6}$/).optional(),
         companyName: z.string().trim().min(2).max(200),
         ownerName: z.string().trim().min(2).max(200),
         email: z.string().email().max(256).transform((s) => s.toLowerCase()),
@@ -63,7 +65,10 @@ onboardingRouter.post(
     );
     if (sectors.length !== new Set(b.sectorCodes).size) throw new HttpError(400, 'UNKNOWN_SECTOR', 'Unknown sector');
 
-    await verifyOtp(b.phone, 'company_register', b.code);
+    if (config.otp.required) {
+      if (!b.code) throw new HttpError(400, 'OTP_INVALID', 'Verification code is required');
+      await verifyOtp(b.phone, 'company_register', b.code);
+    }
 
     const hash = await bcrypt.hash(b.password, 12);
     const ownerId = await withTx(async (tx) => {

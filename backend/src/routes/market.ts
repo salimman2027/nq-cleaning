@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { config } from '../config';
 import { query } from '../db';
 import { HttpError, h, parse } from '../errors';
 
@@ -57,3 +58,8 @@ marketRouter.get('/brand', h(async (_req, res) => {
   const r = await query<{ Value: string }>(`SELECT s.Value FROM SystemSettings s JOIN Companies c ON c.Id=s.CompanyId WHERE c.IsPlatform=1 AND s.[Key]='brand.logoUrl'`);
   res.json({ logoUrl: r[0]?.Value ?? null });
 }));
+
+/** What the sign-up and sign-in screens should offer. */
+marketRouter.get('/config', (_req, res) => {
+  res.json({ phoneVerification: config.otp.required });
+});

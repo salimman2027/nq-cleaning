@@ -139,6 +139,21 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).get('/api/market/brand')).body.logoUrl, null);
   });
 
+  test('with PHONE_VERIFICATION=0 a company can register without a code and phone sign-in is off', async () => {
+    process.env.PHONE_VERIFICATION = '0';
+    try {
+      assert.equal((await request(app).get('/api/market/config')).body.phoneVerification, false);
+      const body = { phone: '0553334455', companyName: 'No Otp Co', ownerName: 'Owner', email: 'nootp@test.local', password: 'Another-Passphrase-2', sectorCodes: ['ac'] };
+      const r = await request(app).post('/api/onboarding/register').send(body);
+      assert.equal(r.status, 201);
+      assert.equal((await request(app).post('/api/auth/otp/request').send({ phone: body.phone })).status, 404);
+      assert.equal((await request(app).post('/api/auth/otp/verify').send({ phone: body.phone, code: '123456' })).status, 404);
+    } finally {
+      delete process.env.PHONE_VERIFICATION;
+    }
+    assert.equal((await request(app).get('/api/market/config')).body.phoneVerification, true);
+  });
+
   test('demo seed creates marketplace data and purge removes exactly it', async () => {
     const { seedDemo, purgeDemo } = await import('../scripts/seed-demo');
     const { query } = await import('../db');

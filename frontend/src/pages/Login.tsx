@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useAuth } from '../auth';
@@ -18,6 +18,8 @@ export default function Login() {
   const [otp, setOtp] = useState('');
   const [sent, setSent] = useState(false);
   const [devCode, setDevCode] = useState('');
+  const [phoneLogin, setPhoneLogin] = useState(false);
+  useEffect(() => { api<{ phoneVerification: boolean }>('/market/config').then((r) => setPhoneLogin(r.phoneVerification)).catch(() => undefined); }, []);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -66,7 +68,7 @@ export default function Login() {
         )}
         {error && <ErrorBox message={error} />}
         <Button type="submit" disabled={busy} className="w-full">{busy ? t('loading') : mode === 'phone' ? (sent ? t('verify') : t('sendCode')) : t('login')}</Button>
-        <button type="button" onClick={() => { setMode(mode === 'email' ? 'phone' : 'email'); setSent(false); setError(''); }} className="w-full text-sm text-cyan-700 dark:text-cyan-400">{mode === 'email' ? t('signInPhone') : t('signInEmail')}</button>
+        {phoneLogin && <button type="button" onClick={() => { setMode(mode === 'email' ? 'phone' : 'email'); setSent(false); setError(''); }} className="w-full text-sm text-cyan-700 dark:text-cyan-400">{mode === 'email' ? t('signInPhone') : t('signInEmail')}</button>}
         <button type="button" onClick={toggle} className="w-full text-sm text-slate-500">{t('lang')}</button>
       </form>
       </div>

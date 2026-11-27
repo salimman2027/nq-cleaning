@@ -12,6 +12,10 @@ export const config = {
   corsOrigins: (process.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   appUrl: (process.env.APP_URL ?? '').replace(/\/$/, ''),
   otp: {
+    /** PHONE_VERIFICATION=0 turns the SMS/WhatsApp code requirement off (company sign-up and phone login). On by default. */
+    get required(): boolean {
+      return process.env.PHONE_VERIFICATION !== '0';
+    },
     ttlSeconds: 300,
     cooldownSeconds: 60,
     maxPerHour: 5,

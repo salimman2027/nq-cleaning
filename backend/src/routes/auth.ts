@@ -171,6 +171,7 @@ authRouter.post(
   '/otp/request',
   otpLimiter,
   h(async (req, res) => {
+    if (!config.otp.required) throw new HttpError(404, 'OTP_DISABLED', 'Phone sign-in is not enabled');
     const { phone } = parse(z.object({ phone: phoneSchema }), req.body);
     const u = await query(`SELECT TOP 1 Id FROM Users WHERE Phone=@p AND IsActive=1 AND IsDeleted=0`, { p: phone });
     let devCode: string | undefined;
@@ -189,6 +190,7 @@ authRouter.post(
   '/otp/verify',
   otpLimiter,
   h(async (req, res) => {
+    if (!config.otp.required) throw new HttpError(404, 'OTP_DISABLED', 'Phone sign-in is not enabled');
     const b = parse(z.object({ phone: phoneSchema, code: z.string().regex(/^\d{6}$/) }), req.body);
     await verifyOtp(b.phone, 'login', b.code);
     const u = (await query<{ Id: number }>(`SELECT TOP 1 Id FROM Users WHERE Phone=@p AND IsActive=1 AND IsDeleted=0`, { p: b.phone }))[0];
