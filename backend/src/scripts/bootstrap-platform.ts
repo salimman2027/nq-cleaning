@@ -11,11 +11,20 @@ export async function bootstrapPlatform(i: { name?: string; adminName?: string; 
     const companyId = Number(co.Id);
     await ensureRoles(tx, companyId, true);
     const email = i.adminEmail.toLowerCase();
-    const exists = await query(`SELECT TOP 1 Id FROM Users WHERE Email=@e AND IsDeleted=0`, { e: email }, tx);
+    const exists = await query<{ Id: number; CompanyId: number; PasswordHash: string }>(`SELECT TOP 1 Id, CompanyId, PasswordHash FROM Users WHERE Email=@e AND IsDeleted=0`, { e: email }, tx);
     if (exists[0]) {
-      const same = await query(`SELECT 1 AS x FROM Users WHERE Id=@i AND CompanyId=@c`, { i: exists[0].Id, c: companyId }, tx);
-      if (!same[0]) throw new Error('ADMIN_EMAIL is already used by a company user. Use a different e-mail for the platform admin.');
-      return { companyId, adminId: null };
+      const roleSql = `INSERT INTO UserRoles (UserId, RoleId) SELECT @u, Id FROM Roles WHERE CompanyId=@c AND Name='Platform Admin'`;
+      if (Number(exists[0].CompanyId) === companyId) return { companyId, adminId: null };
+      // The same e-mail was used by the first (pre-marketplace) setup. Move that account to the platform only when the
+      // supplied password proves it is the same operator; its old company is left untouched and empty of this user.
+      if (!(await bcrypt.compare(i.adminPassword, exists[0].PasswordHash))) {
+        throw new Error('ADMIN_EMAIL belongs to an existing company user and ADMIN_PASSWORD does not match it. Use the same password, or a different e-mail.');
+      }
+      await query(`DELETE FROM RefreshTokens WHERE UserId=@u`, { u: exists[0].Id }, tx);
+      await query(`DELETE FROM UserRoles WHERE UserId=@u`, { u: exists[0].Id }, tx);
+      await query(`UPDATE Users SET CompanyId=@c, BranchId=NULL WHERE Id=@u`, { c: companyId, u: exists[0].Id }, tx);
+      await query(roleSql, { u: exists[0].Id, c: companyId }, tx);
+      return { companyId, adminId: Number(exists[0].Id) };
     }
     const u = (await query<{ Id: number }>(
       `INSERT INTO Users (CompanyId, FullName, Email, PasswordHash) OUTPUT INSERTED.Id VALUES (@c,@n,@e,@p)`,
