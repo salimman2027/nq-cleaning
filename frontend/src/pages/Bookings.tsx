@@ -132,7 +132,10 @@ function BookingDetail({ id, onClose, onChanged }: { id: number; onClose: () => 
 
 function AssignPanel({ booking, onDone, onError }: { booking: Detail; onDone: () => void; onError: (m: string) => void }) {
   const { t } = useI18n();
-  const [techs, setTechs] = useState<{ Id: number; FullName: string; SupervisorId?: number | null }[]>([]);
+  const [techs, setTechs] = useState<{ Id: number; FullName: string; SupervisorId?: number | null; IqamaNumber?: string | null; HasIqamaPhoto?: boolean }[]>([]);
+  const [manual, setManual] = useState(false);
+  const [chosen, setChosen] = useState<number[]>([]);
+  const [find, setFind] = useState('');
   const [sups, setSups] = useState<{ Id: number; FullName: string }[]>([]);
   const [supId, setSupId] = useState<string>(booking.SupervisorId ? String(booking.SupervisorId) : '');
   const [count, setCount] = useState(Math.max(1, booking.assignments.filter((a) => a.IsActive).length));
@@ -147,11 +150,12 @@ function AssignPanel({ booking, onDone, onError }: { booking: Detail; onDone: ()
   const pickIds = () => {
     const current = new Set(booking.assignments.filter((a) => a.IsActive).map((a) => a.TechnicianId));
     const rank = (x: { Id: number; SupervisorId?: number | null }) => (current.has(x.Id) ? 0 : supId && String(x.SupervisorId) === supId ? 1 : 2);
+    if (manual) return chosen;
     return [...techs].sort((x, y) => rank(x) - rank(y)).slice(0, count).map((x) => x.Id);
   };
   const save = async () => {
     const sel = pickIds();
-    if (sel.length < count) { onError(`${t('notEnoughTechs')} (${techs.length})`); return; }
+    if (manual ? sel.length === 0 : sel.length < count) { onError(`${t('notEnoughTechs')} (${techs.length})`); return; }
     try { await api(`/bookings/${booking.Id}/assign`, { method: 'POST', body: { technicianIds: sel, supervisorId: supId ? Number(supId) : null } }); onDone(); } catch (e) { onError(e instanceof ApiError ? e.message : 'Error'); }
   };
   return (
@@ -162,9 +166,23 @@ function AssignPanel({ booking, onDone, onError }: { booking: Detail; onDone: ()
           <option value="">—</option>{sups.map((x) => <option key={x.Id} value={x.Id}>{x.FullName}</option>)}
         </select>
       </div>
+      <label className="mb-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={manual} onChange={(e) => setManual(e.target.checked)} />{t('pickManually')}</label>
+      {manual && (
+        <div className="mb-2 space-y-2">
+          <input value={find} onChange={(e) => setFind(e.target.value)} placeholder={t('searchTech')} className="w-full max-w-xs rounded-lg border border-slate-300 bg-white px-2 py-1 dark:border-slate-600 dark:bg-slate-800" />
+          <ul className="max-h-52 space-y-1 overflow-y-auto">
+            {techs.filter((x) => !find || x.FullName.includes(find) || (x.IqamaNumber ?? '').includes(find)).map((x) => (
+              <li key={x.Id} className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-1"><input type="checkbox" checked={chosen.includes(x.Id)} onChange={(e) => setChosen(e.target.checked ? [...chosen, x.Id] : chosen.filter((i) => i !== x.Id))} />{x.FullName}</label>
+                <span dir="ltr" className="text-xs text-slate-500">{x.IqamaNumber ?? ''}</span>
+                {x.HasIqamaPhoto && <button type="button" className="text-xs underline" onClick={() => void openFile(`/technicians/${x.Id}/iqama-photo`).catch(() => onError('Error'))}>🪪 {t('viewPhoto')}</button>}
+              </li>))}
+          </ul>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
-        <label className="font-semibold" htmlFor="techCount">{t('techCount')}</label>
-        <input id="techCount" type="number" min={1} max={30} dir="ltr" value={count} onChange={(e) => setCount(Math.max(1, Math.min(30, Number(e.target.value) || 1)))} className="w-20 rounded-lg border border-slate-300 bg-white px-2 py-1 dark:border-slate-600 dark:bg-slate-800" />
+        {!manual && <label className="font-semibold" htmlFor="techCount">{t('techCount')}</label>}
+        {!manual && <input id="techCount" type="number" min={1} max={30} dir="ltr" value={count} onChange={(e) => setCount(Math.max(1, Math.min(30, Number(e.target.value) || 1)))} className="w-20 rounded-lg border border-slate-300 bg-white px-2 py-1 dark:border-slate-600 dark:bg-slate-800" />}
         <span className="text-xs text-slate-500">{t('availableNow')}: {techs.length}</span>
         <Button disabled={techs.length === 0} onClick={save}>{t('apply')}</Button>
       </div>
