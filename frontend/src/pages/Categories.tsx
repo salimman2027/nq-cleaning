@@ -26,7 +26,14 @@ export default function Categories() {
     try { await api(`/services/categories?name=${encodeURIComponent(c.Name)}`, { method: 'DELETE' }); load(); }
     catch (e) { setErr(e instanceof ApiError && e.code === 'CATEGORY_IN_USE' ? t('categoryInUse') : 'Error'); }
   };
-  const add = async (e: FormEvent) => { e.preventDefault(); if (name.trim().length >= 2) { await save(name.trim(), null); setName(''); } };
+  const rename = async (c: Cat) => {
+    const to = window.prompt(t('renameCategory'), c.Name)?.trim();
+    if (!to || to === c.Name) return;
+    setErr('');
+    try { await api('/services/categories', { method: 'PATCH', body: { from: c.Name, to } }); load(); }
+    catch (e) { setErr(e instanceof ApiError && e.code === 'CATEGORY_EXISTS' ? t('categoryExists') : 'Error'); }
+  };
+  const add = async (e: FormEvent) => { e.preventDefault(); if (name.trim().length < 2) { setErr(t('categoryShort')); return; } await save(name.trim(), null); setName(''); };
   return (
     <div className="space-y-4">
       <div><h1 className="text-xl font-bold">{t('categories')}</h1><p className="text-sm text-slate-500">{t('categoriesHint')}</p></div>
@@ -34,8 +41,8 @@ export default function Categories() {
       {!manage && <p className="text-sm text-amber-600">{t('noManageCat')}</p>}
       {manage && (
         <form onSubmit={add} className="flex max-w-md gap-2">
-          <Input placeholder={t('categoryLbl')} value={name} onChange={(e) => setName(e.target.value)} />
-          <Button type="submit" disabled={name.trim().length < 2}>+ {t('addCategory')}</Button>
+          <Input placeholder={t('newCategoryPh')} value={name} onChange={(e) => setName(e.target.value)} />
+          <Button type="submit">+ {t('addCategory')}</Button>
         </form>
       )}
       {!rows ? <Skeleton rows={3} /> : rows.length === 0 ? <p className="py-8 text-center text-slate-500">{t('noData')}</p> : (
@@ -45,7 +52,7 @@ export default function Categories() {
               <div className="lattice mb-3 h-32 overflow-hidden rounded-xl bg-cyan-800" style={c.ImageUrl ? { background: `url("${c.ImageUrl}") center/cover` } : undefined} />
               <div className="mb-3 flex items-baseline justify-between"><span className="font-semibold">{c.Name}</span><span className="text-xs text-slate-500">{c.Services} {t('servicesCount')}</span></div>
               {manage && <ImageUpload value={c.ImageUrl ?? ''} onChange={(u) => void save(c.Name, u)} />}
-              {manage && <button type="button" onClick={() => void remove(c)} className="mt-3 text-sm font-medium text-red-600 hover:underline">{t('deleteCategory')}</button>}
+              {manage && <div className="mt-3 flex gap-4 text-sm font-medium"><button type="button" onClick={() => void rename(c)} className="text-cyan-700 hover:underline">{t('renameCategory')}</button><button type="button" onClick={() => void remove(c)} className="text-red-600 hover:underline">{t('deleteCategory')}</button></div>}
             </div>
           ))}
         </div>

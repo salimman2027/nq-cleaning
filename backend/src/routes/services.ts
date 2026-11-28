@@ -54,6 +54,24 @@ servicesRouter.put(
   }),
 );
 
+servicesRouter.patch(
+  '/categories',
+  requirePerm('services.manage'),
+  h(async (req, res) => {
+    const b = parse(z.object({ from: z.string().trim().min(1).max(80), to: z.string().trim().min(2).max(80) }), req.body);
+    const c = req.user!.companyId;
+    if (b.from === b.to) { res.json({ ok: true }); return; }
+    const clash = await query(`SELECT 1 AS x FROM ServiceCategories WHERE CompanyId=@c AND Name=@t UNION SELECT 1 FROM Services WHERE CompanyId=@c AND IsDeleted=0 AND Category=@t`, { c, t: b.to });
+    if (clash.length) throw new HttpError(409, 'CATEGORY_EXISTS', 'A section with this name already exists');
+    await withTx(async (tx) => {
+      await query(`UPDATE Services SET Category=@t WHERE CompanyId=@c AND Category=@f`, { c, f: b.from, t: b.to }, tx);
+      const had = await query(`SELECT 1 AS x FROM ServiceCategories WHERE CompanyId=@c AND Name=@f`, { c, f: b.from }, tx);
+      if (had.length) await query(`UPDATE ServiceCategories SET Name=@t WHERE CompanyId=@c AND Name=@f`, { c, f: b.from, t: b.to }, tx);
+    });
+    res.json({ ok: true });
+  }),
+);
+
 servicesRouter.delete(
   '/categories',
   requirePerm('services.manage'),

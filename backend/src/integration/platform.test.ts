@@ -428,6 +428,10 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     await query(`INSERT INTO ServiceCategories (CompanyId, Name) VALUES (@c, N'قسم مستخدم')`, { c: companyId });
     await query(`INSERT INTO Services (CompanyId, Name, PricingMethod, DefaultMinutes, DefaultTechnicians, Category) VALUES (@c, N'خدمة', 'fixed', 60, 1, N'قسم مستخدم')`, { c: companyId });
     assert.equal((await del('قسم مستخدم')).status, 409);
+    const ren = await request(app).patch('/api/services/categories').set(auth(ownerToken)).send({ from: 'قسم مستخدم', to: 'قسم معدّل' });
+    assert.equal(ren.status, 200);
+    assert.equal((await del('قسم معدّل')).status, 409, 'its service moved with the rename');
+    assert.equal((await request(app).patch('/api/services/categories').set(auth(ownerToken)).send({ from: 'قسم معدّل', to: 'قسم معدّل' })).status, 200);
   });
 
   test('demo seed creates marketplace data and purge removes exactly it', async () => {
