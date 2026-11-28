@@ -1,6 +1,4 @@
--- Field supervisor app: a login for each supervisor, per-company rules for each work stage, and a log of what happened on site (notes, photos, videos, cash).
-ALTER TABLE Supervisors ADD UserId INT NULL REFERENCES Users(Id);
-GO
+-- Field supervisor app (Supervisors.UserId already exists):  per-company rules for each work stage, and a log of what happened on site (notes, photos, videos, cash).
 CREATE TABLE FieldStageSettings(
   CompanyId INT NOT NULL REFERENCES Companies(Id), Stage VARCHAR(12) NOT NULL,
   NoteReq BIT NOT NULL DEFAULT 0, PhotoReq BIT NOT NULL DEFAULT 0, VideoReq BIT NOT NULL DEFAULT 0,
