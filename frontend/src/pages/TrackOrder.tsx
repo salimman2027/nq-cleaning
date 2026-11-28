@@ -32,7 +32,7 @@ export default function TrackOrder({ orderId, onClose }: { orderId: number; onCl
             <div>{t('confirmedAt')}: <b dir="ltr">{d.confirmedAt ? when(d.confirmedAt) : '—'}</b></div>
           </div>
           <ol className="space-y-2">
-            {ORDER.map((s) => {
+            {ORDER.filter((s) => s !== 'cash' || d.events.some((e) => e.stage === 'cash')).map((s) => {
               const evs = d.events.filter((e) => e.stage === s);
               return (
                 <li key={s} className={`rounded-xl p-3 ring-1 ${evs.length ? 'ring-cyan-600' : 'ring-slate-200 dark:ring-slate-700'}`}>

@@ -6,6 +6,7 @@ import { branchScope, requirePerm } from '../auth/middleware';
 import { normalizeMobile } from '../lib/phone';
 import bcrypt from 'bcryptjs';
 import { ensureRoles } from '../services/tenancy';
+import { loadTeams } from '../services/slots';
 
 /** Supervisors and the technicians who report to them. A booking may use any supervisor, not only the technicians' usual one. */
 export const supervisorsRouter = Router();
@@ -63,6 +64,30 @@ supervisorsRouter.put('/:id', requirePerm('technicians.manage'), h(async (req, r
     { n: b.fullName, m: b.mobile ? normalizeMobile(b.mobile) : null, x: b.maxBookingsPerDay, i: id, c: req.user!.companyId });
   if (!r[0]) throw new HttpError(404, 'NOT_FOUND', 'Supervisor not found');
   res.json({ id });
+}));
+
+/** Each team's working hours: its own or the company's. */
+supervisorsRouter.get('/schedules', h(async (req, res) => res.json({ items: await loadTeams(req.user!.companyId) })));
+
+supervisorsRouter.put('/:id/schedule', requirePerm('technicians.manage'), h(async (req, res) => {
+  const id = parse(idParam, req.params.id);
+  const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+  const b = parse(z.object({ open: hhmm, close: hhmm, days: z.string().regex(/^[0-6]{1,7}$/), maxPerSlot: z.number().int().min(1).max(50) }), req.body);
+  if (b.close <= b.open) throw new HttpError(400, 'BAD_SCHEDULE', 'Closing time must be after opening time');
+  const own = await query(`SELECT 1 AS x FROM Supervisors WHERE Id=@i AND CompanyId=@c AND IsDeleted=0`, { i: id, c: req.user!.companyId });
+  if (!own.length) throw new HttpError(404, 'NOT_FOUND', 'Supervisor not found');
+  await query(
+    `MERGE SupervisorSchedule AS t USING (SELECT @i AS SupervisorId) AS s ON t.SupervisorId=s.SupervisorId
+     WHEN MATCHED THEN UPDATE SET OpenTime=@o, CloseTime=@x, Days=@d, MaxPerSlot=@m
+     WHEN NOT MATCHED THEN INSERT (SupervisorId, CompanyId, OpenTime, CloseTime, Days, MaxPerSlot) VALUES (@i,@c,@o,@x,@d,@m);`,
+    { i: id, c: req.user!.companyId, o: b.open, x: b.close, d: [...new Set(b.days.split(''))].sort().join(''), m: b.maxPerSlot });
+  res.json({ ok: true });
+}));
+
+/** Back to following the company schedule. */
+supervisorsRouter.delete('/:id/schedule', requirePerm('technicians.manage'), h(async (req, res) => {
+  await query(`DELETE FROM SupervisorSchedule WHERE SupervisorId=@i AND CompanyId=@c`, { i: parse(idParam, req.params.id), c: req.user!.companyId });
+  res.json({ ok: true });
 }));
 
 /** Gives a supervisor a phone login (mobile number + password), or resets the password of the existing one. The account can only use the field app. */

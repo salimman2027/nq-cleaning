@@ -31,7 +31,8 @@ export async function loadStageRules(companyId: number): Promise<StageRule[]> {
   const rows = await query<Record<string, any>>(`SELECT Stage, NoteReq, PhotoReq, VideoReq FROM FieldStageSettings WHERE CompanyId=@c`, { c: companyId });
   return STAGES.map((s) => {
     const r = rows.find((x) => x.Stage === s);
-    return { stage: s, noteReq: !!r?.NoteReq, photoReq: !!r?.PhotoReq, videoReq: !!r?.VideoReq };
+    // Finishing also records the payment, so a proof photo (transfer receipt or cash) is required until the company says otherwise.
+    return { stage: s, noteReq: !!r?.NoteReq, photoReq: r ? !!r.PhotoReq : s === 'finish', videoReq: !!r?.VideoReq };
   });
 }
 
@@ -110,7 +111,7 @@ fieldRouter.get('/summary', requirePerm('field.work'), h(async (req, res) => {
        FROM Bookings b WHERE b.CompanyId=@c AND b.IsDeleted=0 AND b.SupervisorId=@s AND b.Status NOT IN ('cancelled','postponed')`, { c, s }))[0];
   const cash = (await query<Record<string, any>>(
     `SELECT ISNULL(SUM(e.Amount),0) AS Collected FROM BookingStageEvents e JOIN Bookings b ON b.Id=e.BookingId
-      WHERE e.CompanyId=@c AND b.SupervisorId=@s AND e.Stage='cash' AND CAST(DATEADD(hour,3,e.CreatedAt) AS date) = CAST(DATEADD(hour,3,SYSUTCDATETIME()) AS date)`, { c, s }))[0];
+      WHERE e.CompanyId=@c AND b.SupervisorId=@s AND e.Stage IN ('cash','finish') AND e.Amount IS NOT NULL AND CAST(DATEADD(hour,3,e.CreatedAt) AS date) = CAST(DATEADD(hour,3,SYSUTCDATETIME()) AS date)`, { c, s }))[0];
   const due = (await query<Record<string, any>>(
     `SELECT ISNULL(SUM(b.Total-b.Paid),0) AS Due FROM Bookings b WHERE b.CompanyId=@c AND b.IsDeleted=0 AND b.SupervisorId=@s AND ${FINISHED} AND b.Paid < b.Total AND b.StartAt >= DATEADD(day,-30,SYSUTCDATETIME())`, { c, s }))[0];
   res.json({ linked: true, today: Number(r.Today ?? 0), upcoming: Number(r.Upcoming ?? 0), running: Number(r.Running ?? 0), done: Number(r.Done ?? 0), late: Number(r.Late ?? 0), cashToday: Number(cash.Collected), cashDue: Number(due.Due) });
@@ -127,6 +128,7 @@ const eventSchema = z.object({
   stage: z.enum(STAGES),
   note: z.string().trim().max(1000).optional(),
   amount: z.number().positive().max(1_000_000).optional(),
+  method: z.enum(['cash', 'transfer']).optional(),
   lat: z.number().min(-90).max(90).optional(),
   lng: z.number().min(-180).max(180).optional(),
   files: z.array(z.object({ fileName: z.string().trim().min(1).max(200), dataBase64: z.string().min(4) })).max(8).default([]),
@@ -165,9 +167,14 @@ fieldRouter.post('/jobs/:id/events', requirePerm('field.work'), h(async (req, re
     } else if (b.stage === 'next' && ['assigned', 'on_the_way', 'arrived', 'in_progress', 'paused'].includes(status)) {
       throw new HttpError(409, 'INVALID_STATE', 'Finish this job before moving to the next one');
     }
+    if (b.stage === 'finish') {
+      const due = Number(bk.Total) - Number(bk.Paid);
+      if (due > 0.001 && !b.amount) throw new HttpError(400, 'AMOUNT_REQUIRED', 'Enter the amount received');
+      if (b.amount && b.amount > due + 0.001) throw new HttpError(400, 'OVER_PAYMENT', 'The amount is more than what is still due');
+    }
     const ev = (await query<{ Id: number }>(
-      `INSERT INTO BookingStageEvents (CompanyId, BookingId, Stage, Note, Amount, Latitude, Longitude, CreatedBy) OUTPUT inserted.Id VALUES (@c,@b,@s,@n,@a,@la,@ln,@u)`,
-      { c: companyId, b: id, s: b.stage, n: b.note ?? null, a: b.amount != null ? money(b.amount) : null, la: b.lat ?? null, ln: b.lng ?? null, u: req.user!.id }, tx))[0];
+      `INSERT INTO BookingStageEvents (CompanyId, BookingId, Stage, Note, Amount, Method, Latitude, Longitude, CreatedBy) OUTPUT inserted.Id VALUES (@c,@b,@s,@n,@a,@me,@la,@ln,@u)`,
+      { me: b.amount ? (b.method ?? 'cash') : null, c: companyId, b: id, s: b.stage, n: b.note ?? null, a: b.amount != null ? money(b.amount) : null, la: b.lat ?? null, ln: b.lng ?? null, u: req.user!.id }, tx))[0];
     for (const f of files) {
       await query(`INSERT INTO BookingStageFiles (EventId, BookingId, CompanyId, Kind, MimeType, FileName, SizeBytes, Data) VALUES (@e,@b,@c,@k,@m,@f,@s,@d)`,
         { e: ev.Id, b: id, c: companyId, k: f.kind, m: f.mime, f: f.name.replace(/[\\/\x00-\x1f"]/g, '_').slice(0, 150), s: f.data.length, d: f.data }, tx);
@@ -176,7 +183,7 @@ fieldRouter.post('/jobs/:id/events', requirePerm('field.work'), h(async (req, re
       await query(`UPDATE Bookings SET Status=@t, UpdatedAt=SYSUTCDATETIME(), UpdatedBy=@u WHERE Id=@i`, { t: mv.to, u: req.user!.id, i: id }, tx);
       await query(`INSERT INTO BookingStatusHistory (BookingId, FromStatus, ToStatus, Reason, ChangedBy) VALUES (@b,@f,@t,N'من تطبيق المشرف',@u)`, { b: id, f: status, t: mv.to, u: req.user!.id }, tx);
     }
-    if (b.stage === 'cash') {
+    if ((b.stage === 'cash' || b.stage === 'finish') && b.amount) {
       const paid = Math.round((Number(bk.Paid) + b.amount!) * 100) / 100;
       await query(`UPDATE Bookings SET Paid=@p, UpdatedAt=SYSUTCDATETIME() WHERE Id=@i`, { p: money(paid), i: id }, tx);
       if (paid + 0.001 >= Number(bk.Total)) await query(`UPDATE BookingRequests SET PaymentStatus='paid', UpdatedAt=SYSUTCDATETIME() WHERE BookingId=@i`, { i: id }, tx);

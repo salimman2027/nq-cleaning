@@ -12,7 +12,7 @@ interface Job {
   Id: number; BookingNo: string; Status: string; StartAt: string; Total: number; Paid: number; Notes: string | null;
   CustomerName: string; CustomerMobile: string; City: string | null; District: string | null; Street: string | null; MapUrl: string | null;
   Latitude: number | null; Longitude: number | null; PhotoUrl: string | null;
-  Lines: { Name: string; Quantity: number }[]; Team: string[]; Events: { Id: number; Stage: Stage; Note: string | null; Amount: number | null; CreatedAt: string; Files: number }[];
+  Lines: { Name: string; Quantity: number }[]; Team: string[]; Events: { Id: number; Stage: Stage; Note: string | null; Amount: number | null; Method?: string | null; CreatedAt: string; Files: number }[];
 }
 const ICON: Record<Stage, string> = { depart: '🚗', arrive: '📍', start: '▶️', progress: '📋', finish: '✅', cash: '💵', next: '➡️' };
 const ORDER: Stage[] = ['depart', 'arrive', 'start', 'progress', 'finish', 'cash', 'next'];
@@ -128,7 +128,7 @@ export function FieldJob() {
       </section>
       {err && <ErrorBox message={err} />}
       <ol className="space-y-2">
-        {ORDER.map((s) => {
+        {ORDER.filter((s) => s !== 'cash' || can.includes('cash') || done.has('cash')).map((s) => {
           const evs = job.Events.filter((e) => e.Stage === s);
           const ok = can.includes(s);
           return (
@@ -137,7 +137,7 @@ export function FieldJob() {
                 <div className="flex items-center gap-2 text-lg">{done.has(s) ? '✔️' : ICON[s]} <span className="font-semibold">{t(`st_${s}` as Key)}</span></div>
                 {ok && <Button className="!px-5 !py-3 text-base" onClick={() => setStage(s)}>{t('doIt')}</Button>}
               </div>
-              {evs.map((e) => <div key={e.Id} className="mt-1 text-sm text-slate-600 dark:text-slate-300">{time(e.CreatedAt)}{e.Amount != null ? ` · ${money(e.Amount)}` : ''}{e.Note ? ` · ${e.Note}` : ''}{e.Files ? ` · 📎${e.Files}` : ''}</div>)}
+              {evs.map((e) => <div key={e.Id} className="mt-1 text-sm text-slate-600 dark:text-slate-300">{time(e.CreatedAt)}{e.Amount != null ? ` · ${money(e.Amount)}${e.Method === 'transfer' ? ` (${t('payTransfer')})` : ''}` : ''}{e.Note ? ` · ${e.Note}` : ''}{e.Files ? ` · 📎${e.Files}` : ''}</div>)}
             </li>
           );
         })}
@@ -150,7 +150,9 @@ export function FieldJob() {
 function StageSheet({ job, stage, rule, due, onClose, onDone }: { job: Job; stage: Stage; rule?: Rule; due: number; onClose: () => void; onDone: () => void }) {
   const { t } = useI18n();
   const [note, setNote] = useState('');
-  const [amount, setAmount] = useState(stage === 'cash' ? String(due) : '');
+  const pays = stage === 'cash' || (stage === 'finish' && due > 0);
+  const [amount, setAmount] = useState(pays ? String(due) : '');
+  const [method, setMethod] = useState<'cash' | 'transfer'>('cash');
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -167,6 +169,7 @@ function StageSheet({ job, stage, rule, due, onClose, onDone }: { job: Job; stag
   const videos = files.filter((f) => f.type.startsWith('video/')).length;
   const submit = async () => {
     setErr('');
+    if (pays && !(Number(amount) > 0)) { setErr(t('needAmount')); return; }
     if (rule?.noteReq && !note.trim()) { setErr(t('needNote')); return; }
     if (rule?.photoReq && photos === 0) { setErr(t('needPhoto')); return; }
     if (rule?.videoReq && videos === 0) { setErr(t('needVideo')); return; }
@@ -176,7 +179,7 @@ function StageSheet({ job, stage, rule, due, onClose, onDone }: { job: Job; stag
       if ((stage === 'arrive' || stage === 'depart') && navigator.geolocation) {
         await new Promise<void>((ok) => navigator.geolocation.getCurrentPosition((p) => { lat = p.coords.latitude; lng = p.coords.longitude; ok(); }, () => ok(), { timeout: 5000 }));
       }
-      await api(`/field/jobs/${job.Id}/events`, { method: 'POST', body: { stage, note: note.trim() || undefined, amount: stage === 'cash' ? Number(amount) : undefined, lat, lng, files: await Promise.all(files.map(async (f) => ({ fileName: f.name, dataBase64: await fileToBase64(f) }))) } });
+      await api(`/field/jobs/${job.Id}/events`, { method: 'POST', body: { stage, note: note.trim() || undefined, amount: pays ? Number(amount) : undefined, method: pays ? method : undefined, lat, lng, files: await Promise.all(files.map(async (f) => ({ fileName: f.name, dataBase64: await fileToBase64(f) }))) } });
       onDone();
     } catch (e) { setErr(e instanceof ApiError ? (({ INVALID_STATE: t('badState'), OVER_PAYMENT: t('overPay'), FILE_TOO_LARGE: t('videoTooBig') } as Record<string, string>)[e.code] ?? e.message) : 'Error'); } finally { setBusy(false); }
   };
@@ -186,10 +189,11 @@ function StageSheet({ job, stage, rule, due, onClose, onDone }: { job: Job; stag
       <div className="max-h-[92vh] w-full max-w-xl space-y-3 overflow-y-auto rounded-t-3xl bg-white p-5 dark:bg-slate-900 sm:rounded-3xl">
         <div className="flex items-center justify-between"><h2 className="text-lg font-bold">{ICON[stage]} {t(`st_${stage}` as Key)}</h2><button type="button" onClick={onClose} className="text-2xl" aria-label={t('cancel')}>×</button></div>
         {err && <ErrorBox message={err} />}
-        {stage === 'cash' && <label className="block text-sm">{t('amountReceived')}<input type="number" inputMode="decimal" min={0} step="0.01" dir="ltr" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-3 text-lg dark:border-slate-600 dark:bg-slate-800" /></label>}
+        {pays && <div className="flex gap-2">{(['cash', 'transfer'] as const).map((m) => <button key={m} type="button" aria-pressed={method === m} onClick={() => setMethod(m)} className={`flex-1 rounded-xl border-2 px-3 py-2 ${method === m ? 'border-cyan-700 bg-cyan-50 font-semibold dark:bg-slate-800' : 'border-slate-300 dark:border-slate-600'}`}>{m === 'cash' ? `💵 ${t('payCashLbl')}` : `🏦 ${t('payTransfer')}`}</button>)}</div>}
+        {pays && <label className="block text-sm">{t('amountReceived')}<input type="number" inputMode="decimal" min={0} step="0.01" dir="ltr" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-3 text-lg dark:border-slate-600 dark:bg-slate-800" /></label>}
         <label className="block text-sm">{t('noteLbl')}{star(rule?.noteReq)}<textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800" /></label>
         <div className="grid grid-cols-2 gap-2">
-          <label className="cursor-pointer rounded-xl border-2 border-dashed border-slate-300 p-3 text-center dark:border-slate-600">📷 {t('addPhoto')}{star(rule?.photoReq)} ({photos})<input type="file" accept="image/*" multiple className="sr-only" onChange={(e) => { void add(e.target.files, false); e.target.value = ''; }} /></label>
+          <label className="cursor-pointer rounded-xl border-2 border-dashed border-slate-300 p-3 text-center dark:border-slate-600">📷 {stage === 'finish' ? t('proofPhoto') : t('addPhoto')}{star(rule?.photoReq)} ({photos})<input type="file" accept="image/*" multiple className="sr-only" onChange={(e) => { void add(e.target.files, false); e.target.value = ''; }} /></label>
           <label className="cursor-pointer rounded-xl border-2 border-dashed border-slate-300 p-3 text-center dark:border-slate-600">🎥 {t('addVideo')}{star(rule?.videoReq)} ({videos})<input type="file" accept="video/*" className="sr-only" onChange={(e) => { void add(e.target.files, true); e.target.value = ''; }} /></label>
         </div>
         {files.length > 0 && <ul className="flex flex-wrap gap-2 text-xs">{files.map((f, i) => <li key={i} className="flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 dark:bg-slate-800">{f.type.startsWith('video/') ? '🎥' : '📷'} {Math.round(f.size / 1024)} KB <button type="button" onClick={() => setFiles(files.filter((_, k) => k !== i))} aria-label="x">✕</button></li>)}</ul>}
@@ -200,7 +204,7 @@ function StageSheet({ job, stage, rule, due, onClose, onDone }: { job: Job; stag
 }
 
 /** The office sees the same log on the booking screen. */
-export function StageLog({ bookingId, events }: { bookingId: number; events: { Id: number; Stage: Stage; Note: string | null; Amount: number | null; CreatedAt: string; ByName: string | null; Files: { Id: number; Kind: string; FileName: string }[] }[] }) {
+export function StageLog({ bookingId, events }: { bookingId: number; events: { Id: number; Stage: Stage; Note: string | null; Amount: number | null; Method?: string | null; CreatedAt: string; ByName: string | null; Files: { Id: number; Kind: string; FileName: string }[] }[] }) {
   const { t } = useI18n();
   if (events.length === 0) return null;
   return (
@@ -209,7 +213,7 @@ export function StageLog({ bookingId, events }: { bookingId: number; events: { I
       <ol className="space-y-2">
         {events.map((e) => (
           <li key={e.Id} className="text-sm">
-            <div>{ICON[e.Stage]} <b>{t(`st_${e.Stage}` as Key)}</b> · <span className="text-slate-500">{time(e.CreatedAt)}{e.ByName ? ` · ${e.ByName}` : ''}{e.Amount != null ? ` · ${money(e.Amount)}` : ''}</span></div>
+            <div>{ICON[e.Stage]} <b>{t(`st_${e.Stage}` as Key)}</b> · <span className="text-slate-500">{time(e.CreatedAt)}{e.ByName ? ` · ${e.ByName}` : ''}{e.Amount != null ? ` · ${money(e.Amount)}${e.Method === 'transfer' ? ` (${t('payTransfer')})` : ''}` : ''}</span></div>
             {e.Note && <div className="text-slate-600 dark:text-slate-300">{e.Note}</div>}
             {e.Files.length > 0 && <div className="mt-1 flex flex-wrap gap-2">{e.Files.map((f) => f.Kind === 'photo'
               ? <AuthImg key={f.Id} path={`/bookings/${bookingId}/stage-files/${f.Id}`} />

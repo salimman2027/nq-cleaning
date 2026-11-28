@@ -147,11 +147,11 @@ shopRouter.get('/orders/:id/track', customerAuth, h(async (req, res) => {
        FROM BookingRequests r JOIN Companies c ON c.Id=r.CompanyId LEFT JOIN Bookings b ON b.Id=r.BookingId WHERE r.Id=@i AND r.CustomerId=@c`, { i: id, c: req.customerId }))[0];
   if (!o) throw new HttpError(404, 'NOT_FOUND', 'Order not found');
   const events = o.BookingId ? await query<Record<string, any>>(
-    `SELECT e.Id, e.Stage, e.Note, e.Amount, e.CreatedAt, (SELECT f.Id, f.Kind FROM BookingStageFiles f WHERE f.EventId=e.Id FOR JSON PATH) AS FilesJson
+    `SELECT e.Id, e.Stage, e.Note, e.Amount, e.Method, e.CreatedAt, (SELECT f.Id, f.Kind FROM BookingStageFiles f WHERE f.EventId=e.Id FOR JSON PATH) AS FilesJson
        FROM BookingStageEvents e WHERE e.BookingId=@b AND e.Stage<>'next' ORDER BY e.Id`, { b: o.BookingId }) : [];
   res.json({
     requestId: o.Id, status: o.Status, company: o.CompanyName, slug: o.Slug, requestedAt: o.CreatedAt, confirmedAt: o.ConfirmedAt ?? null,
-    events: events.map((e) => ({ id: e.Id, stage: e.Stage, note: e.Note, amount: e.Amount, at: e.CreatedAt, files: e.FilesJson ? JSON.parse(e.FilesJson) : [] })),
+    events: events.map((e) => ({ id: e.Id, stage: e.Stage, note: e.Note, amount: e.Amount, method: e.Method, at: e.CreatedAt, files: e.FilesJson ? JSON.parse(e.FilesJson) : [] })),
   });
 }));
 

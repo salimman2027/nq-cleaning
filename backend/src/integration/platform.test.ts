@@ -265,13 +265,14 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await ev({ stage: 'start' })).status, 201);
     assert.equal((await ev({ stage: 'progress', note: 'نص الشغل' })).status, 201);
     assert.equal((await ev({ stage: 'cash', amount: 1 })).status, 409, 'cash only after finishing');
-    assert.equal((await ev({ stage: 'finish' })).status, 201);
-    assert.equal((await ev({ stage: 'cash', amount: Number(det.Total) + 1 })).status, 400, 'more than due');
-    assert.equal((await ev({ stage: 'cash', amount: Number(det.Total) })).status, 201);
+    assert.equal((await ev({ stage: 'finish' })).status, 400, 'finishing needs a proof photo and the amount received');
+    assert.equal((await ev({ stage: 'finish', files: [{ fileName: 'p.png', dataBase64: png }] })).status, 400, 'amount required while money is due');
+    assert.equal((await ev({ stage: 'finish', amount: Number(det.Total) + 1, method: 'transfer', files: [{ fileName: 'p.png', dataBase64: png }] })).status, 400, 'more than due');
+    assert.equal((await ev({ stage: 'finish', amount: Number(det.Total), method: 'transfer', files: [{ fileName: 'p.png', dataBase64: png }] })).status, 201);
     const after = (await request(app).get(`/api/bookings/${bk.Id}`).set(auth(ownerToken))).body;
     assert.equal(after.Status, 'awaiting_review');
     assert.equal(Number(after.Paid), Number(det.Total));
-    assert.equal(after.stageEvents.length, 6);
+    assert.equal(after.stageEvents.length, 5);
     const fid = after.stageEvents.find((e: { Stage: string }) => e.Stage === 'arrive').Files[0].Id;
     assert.equal((await request(app).get(`/api/bookings/${bk.Id}/stage-files/${fid}`)).status, 401);
     assert.equal((await request(app).get(`/api/bookings/${bk.Id}/stage-files/${fid}`).set(auth(ownerToken))).status, 200);
@@ -417,6 +418,14 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     const put = await request(app).put('/api/company/schedule').set(auth(ownerToken)).send({ open: '09:00', close: '13:00', slotMinutes: 120, days: dow, maxPerSlot: 1 });
     assert.equal(put.status, 200);
     assert.equal((await request(app).put('/api/company/schedule').set(auth(ownerToken)).send({ open: '09:00', close: '10:00', slotMinutes: 120, days: dow, maxPerSlot: 1 })).status, 400);
+    // Teams decide who works when: team 1 works this day 09:00-13:00 (one job per slot), every other team is off that day.
+    const teams = (await request(app).get('/api/supervisors/schedules').set(auth(ownerToken))).body.items as { supervisorId: number }[];
+    assert.ok(teams.length >= 1);
+    const off = String((Number(dow) + 3) % 7);
+    for (const [i, tm] of teams.entries()) {
+      const r = await request(app).put(`/api/supervisors/${tm.supervisorId}/schedule`).set(auth(ownerToken)).send(i === 0 ? { open: '09:00', close: '13:00', days: dow, maxPerSlot: 1 } : { open: '09:00', close: '13:00', days: off, maxPerSlot: 1 });
+      assert.equal(r.status, 200);
+    }
     const sl = await request(app).get(`/api/market/companies/clean-co/slots?date=${day}`);
     assert.deepEqual(sl.body.slots.map((x: { time: string }) => x.time), ['09:00', '11:00']);
     const body = { serviceId: svc, customerName: 'Sara', phone: '0551112299', date: day, city: 'الرياض', district: 'العليا' };

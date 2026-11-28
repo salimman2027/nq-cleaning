@@ -109,7 +109,7 @@ bookingsRouter.get(
     const scope = branchScope(u);
     if (!rows[0] || (scope !== null && rows[0].BranchId !== scope)) throw new HttpError(404, 'NOT_FOUND', 'Booking not found');
     const [stageEvents, teamFiles, lines, assignments, history] = await Promise.all([
-      query(`SELECT e.Id, e.Stage, e.Note, e.Amount, e.Latitude, e.Longitude, e.CreatedAt, u.FullName AS ByName, (SELECT f.Id, f.Kind, f.FileName FROM BookingStageFiles f WHERE f.EventId=e.Id FOR JSON PATH) AS FilesJson FROM BookingStageEvents e LEFT JOIN Users u ON u.Id=e.CreatedBy WHERE e.BookingId=@i ORDER BY e.Id`, { i: id }),
+      query(`SELECT e.Id, e.Stage, e.Note, e.Amount, e.Method, e.Latitude, e.Longitude, e.CreatedAt, u.FullName AS ByName, (SELECT f.Id, f.Kind, f.FileName FROM BookingStageFiles f WHERE f.EventId=e.Id FOR JSON PATH) AS FilesJson FROM BookingStageEvents e LEFT JOIN Users u ON u.Id=e.CreatedBy WHERE e.BookingId=@i ORDER BY e.Id`, { i: id }),
       query(`SELECT Id, FileName, MimeType, SizeBytes, UploadedAt FROM BookingTeamFiles WHERE BookingId=@i ORDER BY Id`, { i: id }),
       query(`SELECT d.Id, d.ServiceId, s.Name AS ServiceName, d.Quantity, d.UnitPrice, d.LineTotal FROM BookingDetails d JOIN Services s ON s.Id=d.ServiceId WHERE d.BookingId=@i`, { i: id }),
       query(`SELECT a.Id, a.TechnicianId, t.FullName, a.StartAt, a.EndAt, a.IsActive FROM BookingAssignments a JOIN Technicians t ON t.Id=a.TechnicianId WHERE a.BookingId=@i ORDER BY a.Id`, { i: id }),
