@@ -20,11 +20,18 @@ export default function Categories() {
     setErr('');
     try { await api('/services/categories', { method: 'PUT', body: { name: n, imageUrl: imageUrl || null } }); load(); } catch (e) { setErr(e instanceof ApiError ? t('imgFail') : 'Error'); }
   };
+  const remove = async (c: Cat) => {
+    if (!window.confirm(`${t('deleteCategoryQ')} ${c.Name}`)) return;
+    setErr('');
+    try { await api(`/services/categories?name=${encodeURIComponent(c.Name)}`, { method: 'DELETE' }); load(); }
+    catch (e) { setErr(e instanceof ApiError && e.code === 'CATEGORY_IN_USE' ? t('categoryInUse') : 'Error'); }
+  };
   const add = async (e: FormEvent) => { e.preventDefault(); if (name.trim().length >= 2) { await save(name.trim(), null); setName(''); } };
   return (
     <div className="space-y-4">
       <div><h1 className="text-xl font-bold">{t('categories')}</h1><p className="text-sm text-slate-500">{t('categoriesHint')}</p></div>
       {err && <ErrorBox message={err} />}
+      {!manage && <p className="text-sm text-amber-600">{t('noManageCat')}</p>}
       {manage && (
         <form onSubmit={add} className="flex max-w-md gap-2">
           <Input placeholder={t('categoryLbl')} value={name} onChange={(e) => setName(e.target.value)} />
@@ -38,6 +45,7 @@ export default function Categories() {
               <div className="lattice mb-3 h-32 overflow-hidden rounded-xl bg-cyan-800" style={c.ImageUrl ? { background: `url("${c.ImageUrl}") center/cover` } : undefined} />
               <div className="mb-3 flex items-baseline justify-between"><span className="font-semibold">{c.Name}</span><span className="text-xs text-slate-500">{c.Services} {t('servicesCount')}</span></div>
               {manage && <ImageUpload value={c.ImageUrl ?? ''} onChange={(u) => void save(c.Name, u)} />}
+              {manage && <button type="button" onClick={() => void remove(c)} className="mt-3 text-sm font-medium text-red-600 hover:underline">{t('deleteCategory')}</button>}
             </div>
           ))}
         </div>

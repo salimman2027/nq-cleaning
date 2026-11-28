@@ -54,6 +54,21 @@ servicesRouter.put(
   }),
 );
 
+servicesRouter.delete(
+  '/categories',
+  requirePerm('services.manage'),
+  h(async (req, res) => {
+    const b = parse(z.object({ name: z.string().trim().min(1).max(80) }), req.query);
+    const used = await query<{ N: number }>(
+      `SELECT COUNT(*) AS N FROM Services WHERE CompanyId=@c AND IsDeleted=0 AND Category=@n`,
+      { c: req.user!.companyId, n: b.name },
+    );
+    if (used[0].N > 0) throw new HttpError(409, 'CATEGORY_IN_USE', `Section has ${used[0].N} services`);
+    await query(`DELETE FROM ServiceCategories WHERE CompanyId=@c AND Name=@n`, { c: req.user!.companyId, n: b.name });
+    res.json({ ok: true });
+  }),
+);
+
 servicesRouter.get(
   '/',
   requirePerm('services.view'),

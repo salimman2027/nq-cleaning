@@ -347,6 +347,19 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).get('/api/market/config')).body.phoneVerification, true);
   });
 
+  test('sections can be added and deleted; a section with services cannot', async () => {
+    const put = (name: string) => request(app).put('/api/services/categories').set(auth(ownerToken)).send({ name });
+    assert.equal((await put('قسم مؤقت')).status, 200);
+    const del = (name: string) => request(app).delete('/api/services/categories').query({ name }).set(auth(ownerToken));
+    assert.equal((await del('قسم مؤقت')).status, 200);
+    const list = await request(app).get('/api/services/categories').set(auth(ownerToken));
+    assert.ok(!list.body.items.some((c: { Name: string }) => c.Name === 'قسم مؤقت'));
+    const { query } = await import('../db');
+    await query(`INSERT INTO ServiceCategories (CompanyId, Name) VALUES (@c, N'قسم مستخدم')`, { c: companyId });
+    await query(`INSERT INTO Services (CompanyId, Name, PricingMethod, DefaultMinutes, DefaultTechnicians, Category) VALUES (@c, N'خدمة', 'fixed', 60, 1, N'قسم مستخدم')`, { c: companyId });
+    assert.equal((await del('قسم مستخدم')).status, 409);
+  });
+
   test('demo seed creates marketplace data and purge removes exactly it', async () => {
     const { seedDemo, purgeDemo } = await import('../scripts/seed-demo');
     const { query } = await import('../db');
