@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, ApiError } from '../api';
+import { api, ApiError, fileToBase64 } from '../api';
 import { useI18n, type Key } from '../i18n';
 import { useShop } from '../shop';
 import { Button, ErrorBox, money } from '../ui';
@@ -17,10 +17,19 @@ export default function Cart() {
   const [methods, setMethods] = useState<{ code: string; enabled: boolean }[]>(DEFAULT_METHODS);
   useEffect(() => { api<{ paymentMethods?: { code: string; enabled: boolean }[] }>('/market/config').then((r) => { if (r.paymentMethods) setMethods(r.paymentMethods); }).catch(() => undefined); }, []);
   const today = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
-  const [f, setF] = useState({ date: '', period: 'morning', address: '', notes: '', pay: 'cash', city: '', district: '' });
+  const [f, setF] = useState({ date: '', period: 'morning', address: '', notes: '', pay: 'cash', city: '', district: '', lat: 0, lng: 0, photo: '' });
   const [areas, setAreas] = useState<ServiceArea[]>([]);
   useEffect(() => { if (cart?.slug) api<{ areas?: ServiceArea[] }>(`/market/companies/${cart.slug}`).then((r) => setAreas(r.areas ?? [])).catch(() => undefined); }, [cart?.slug]);
   const [err, setErr] = useState('');
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const locate = () => { if (!navigator.geolocation) return; navigator.geolocation.getCurrentPosition((p) => setF((x) => ({ ...x, lat: p.coords.latitude, lng: p.coords.longitude })), () => setErr(t('locationFail')), { enableHighAccuracy: true, timeout: 15000 }); };
+  const pickPhoto = async (file?: File) => {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setErr(t('imgTooBig')); return; }
+    setPhotoBusy(true);
+    try { const r = await api<{ url: string }>(`/market/companies/${cart?.slug}/photo`, { method: 'POST', body: { dataBase64: await fileToBase64(file) } }); setF((x) => ({ ...x, photo: r.url })); } catch { setErr(t('imgFail')); } finally { setPhotoBusy(false); }
+  };
+
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<number | null>(null);
   const cls = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-base dark:border-slate-600 dark:bg-slate-800';
@@ -30,7 +39,7 @@ export default function Cart() {
     if (!cart) return;
     setBusy(true); setErr('');
     try {
-      const r = await api<{ id: number }>('/shop/orders', { method: 'POST', customer: true, body: { slug: cart.slug, items: cart.items.map((i) => ({ serviceId: i.serviceId, qty: i.qty })), date: f.date, period: f.period, city: f.city || undefined, district: f.district || undefined, address: f.address, notes: f.notes || undefined, paymentMethod: f.pay } });
+      const r = await api<{ id: number }>('/shop/orders', { method: 'POST', customer: true, body: { slug: cart.slug, items: cart.items.map((i) => ({ serviceId: i.serviceId, qty: i.qty })), date: f.date, period: f.period, lat: f.lat || undefined, lng: f.lng || undefined, photoUrl: f.photo || undefined, city: f.city || undefined, district: f.district || undefined, address: f.address, notes: f.notes || undefined, paymentMethod: f.pay } });
       clear(); setDone(r.id);
     } catch (ex) { setErr(ex instanceof ApiError ? (ex.code === 'BAD_SERVICE' ? t('cartStale') : ex.code === 'BAD_DATE' ? t('badDate') : ex.code === 'OUT_OF_AREA' ? t('outOfArea') : t('err_VALIDATION_ERROR')) : 'Error'); } finally { setBusy(false); }
   };
@@ -71,6 +80,13 @@ export default function Cart() {
           <select className={cls} value={f.period} onChange={(e) => setF({ ...f, period: e.target.value })} aria-label={t('period')}>{['morning', 'afternoon', 'evening'].map((p) => <option key={p} value={p}>{t(`p_${p}` as Key)}</option>)}</select>
           <AreaSelect areas={areas} city={f.city} district={f.district} onChange={(city, district) => setF({ ...f, city, district })} className={cls} />
           <input required minLength={3} className={cls} placeholder={t('addressReq')} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
+      <div className="space-y-2">
+        <button type="button" onClick={locate} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-medium dark:border-slate-600">📍 {f.lat ? t('locationSet') : t('shareLocation')}</button>
+        <div className="flex items-center gap-3">
+          {f.photo && <img src={f.photo} alt="" className="h-14 w-20 rounded-lg object-cover" />}
+          <label className="cursor-pointer rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-medium dark:border-slate-600">{photoBusy ? t('loading') : f.photo ? t('replaceFile') : `📷 ${t('housePhoto')}`}<input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp" onChange={(e) => { void pickPhoto(e.target.files?.[0]); e.target.value = ''; }} /></label>
+        </div>
+      </div>
           <input className={cls} placeholder={t('notesOpt')} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
           <fieldset className="space-y-2"><legend className="mb-1 text-sm font-medium">{t('payment')}</legend>
             {methods.map((m) => (

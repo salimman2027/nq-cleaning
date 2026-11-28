@@ -6,6 +6,7 @@ import { HttpError, h, parse } from '../errors';
 import rateLimit from 'express-rate-limit';
 import { optionalCustomerId } from './shop';
 import { checkArea } from '../services/areas';
+import { sniffMime } from '../lib/documents';
 import { loadAreas } from './company';
 import { CITIES, DISTRICT_SUGGESTIONS } from '../lib/areas';
 import { isSaudiMobile } from '../lib/otp';
@@ -70,6 +71,20 @@ export const PAYMENT_METHODS = [{ code: 'cash', enabled: true }, { code: 'card',
 const requestLimiter = rateLimit({ windowMs: 10 * 60_000, limit: 8, standardHeaders: true, legacyHeaders: false, skip: () => config.env === 'test' });
 const riyadhToday = (): string => new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
 
+/** A visitor attaches a photo of the place to a request. Images only, 2 MB, rate-limited; stored under the company being asked. */
+marketRouter.post('/companies/:slug/photo', requestLimiter, h(async (req, res) => {
+  const slug = parse(z.string().regex(/^[a-z0-9-]{3,60}$/), req.params.slug);
+  const { dataBase64 } = parse(z.object({ dataBase64: z.string().min(4) }), req.body);
+  const c = (await query<{ Id: number }>(`SELECT Id FROM Companies WHERE Slug=@s AND Status='approved' AND IsDeleted=0 AND IsPlatform=0`, { s: slug }))[0];
+  if (!c) throw new HttpError(404, 'NOT_FOUND', 'Company not found');
+  const data = Buffer.from(dataBase64.replace(/^data:[^,]*,/, ''), 'base64');
+  if (data.length > 2 * 1024 * 1024) throw new HttpError(413, 'FILE_TOO_LARGE', 'Image must be 2 MB or smaller');
+  const mime = sniffMime(data);
+  if (!mime || mime === 'application/pdf') throw new HttpError(415, 'UNSUPPORTED_FILE', 'Only PNG, JPG or WEBP images are accepted');
+  const r = await query<{ Id: number }>(`INSERT INTO MediaFiles (CompanyId, MimeType, SizeBytes, Data) OUTPUT inserted.Id VALUES (@c,@m,@s,@d)`, { c: c.Id, m: mime, s: data.length, d: data });
+  res.status(201).json({ url: `/api/media/${r[0].Id}` });
+}));
+
 /** A visitor asks a company for a service. Nothing is reserved or charged; the company calls to confirm. */
 marketRouter.post('/companies/:slug/requests', requestLimiter, h(async (req, res) => {
   const slug = parse(z.string().regex(/^[a-z0-9-]{3,60}$/), req.params.slug);
@@ -83,6 +98,9 @@ marketRouter.post('/companies/:slug/requests', requestLimiter, h(async (req, res
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     period: z.enum(['morning', 'afternoon', 'evening']),
     notes: z.string().trim().max(500).optional(),
+    lat: z.number().min(-90).max(90).optional(),
+    lng: z.number().min(-180).max(180).optional(),
+    photoUrl: z.string().regex(/^\/api\/media\/\d+$/).optional(),
   }), req.body);
   const today = riyadhToday();
   const max = new Date(Date.parse(today) + 90 * 86400_000).toISOString().slice(0, 10);
@@ -93,9 +111,9 @@ marketRouter.post('/companies/:slug/requests', requestLimiter, h(async (req, res
   if (!svc.length) throw new HttpError(400, 'BAD_SERVICE', 'Unknown service');
   const area = await checkArea(c.Id, b.city, b.district);
   const r = await query<{ Id: number }>(
-    `INSERT INTO BookingRequests (CompanyId, ServiceId, CustomerName, Phone, Address, PreferredDate, PreferredPeriod, Notes, CustomerId, City, District)
-     OUTPUT inserted.Id VALUES (@c,@s,@n,@p,@a,@d,@pe,@no,@cu,@ci,@di)`,
-    { ci: area.city, di: area.district, c: c.Id, s: b.serviceId, n: b.customerName, p: b.phone, a: b.address ?? null, d: b.date, pe: b.period, no: b.notes ?? null, cu: optionalCustomerId(req) },
+    `INSERT INTO BookingRequests (CompanyId, ServiceId, CustomerName, Phone, Address, PreferredDate, PreferredPeriod, Notes, CustomerId, City, District, Latitude, Longitude, PhotoUrl)
+     OUTPUT inserted.Id VALUES (@c,@s,@n,@p,@a,@d,@pe,@no,@cu,@ci,@di,@la,@ln,@ph)`,
+    { la: b.lat ?? null, ln: b.lng ?? null, ph: b.photoUrl ?? null, ci: area.city, di: area.district, c: c.Id, s: b.serviceId, n: b.customerName, p: b.phone, a: b.address ?? null, d: b.date, pe: b.period, no: b.notes ?? null, cu: optionalCustomerId(req) },
   );
   res.status(201).json({ id: r[0].Id, status: 'new' });
 }));

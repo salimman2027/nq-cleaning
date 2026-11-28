@@ -15,7 +15,7 @@ requestsRouter.get(
   h(async (req, res) => {
     await backfillConfirmed(req.user!.companyId, req.user!.id);
     const items = await query(
-      `SELECT r.Id, r.PaymentMethod, r.PaymentStatus, r.Total, r.CustomerName, r.Phone, r.Address, r.City, r.District, r.PreferredDate, r.PreferredPeriod, r.Notes, r.Status, r.CreatedAt, s.Name AS ServiceName
+      `SELECT r.Id, r.PaymentMethod, r.PaymentStatus, r.Total, r.CustomerName, r.Phone, r.Address, r.City, r.District, r.PreferredDate, r.PreferredPeriod, r.Notes, r.Status, r.CreatedAt, r.Latitude, r.Longitude, r.PhotoUrl, s.Name AS ServiceName
          FROM BookingRequests r JOIN Services s ON s.Id=r.ServiceId
         WHERE r.CompanyId=@c ORDER BY CASE r.Status WHEN 'new' THEN 0 ELSE 1 END, r.CreatedAt DESC`,
       { c: req.user!.companyId },
@@ -23,6 +23,20 @@ requestsRouter.get(
     const ids = items.map((r) => r.Id);
     const lines = ids.length ? await query(`SELECT RequestId, Name, UnitPrice, Qty FROM BookingRequestItems WHERE RequestId IN (SELECT Id FROM BookingRequests WHERE CompanyId=@c)`, { c: req.user!.companyId }) : [];
     res.json({ items: items.map((r) => ({ ...r, Items: lines.filter((l) => l.RequestId === r.Id) })) });
+  }),
+);
+
+requestsRouter.patch(
+  '/:id/total',
+  requirePerm('bookings.update'),
+  h(async (req, res) => {
+    const id = parse(z.coerce.number().int().positive(), req.params.id);
+    const { total } = parse(z.object({ total: z.number().min(0).max(1_000_000) }), req.body);
+    const cur = (await query<{ Status: string; PaymentStatus: string | null }>(`SELECT Status, PaymentStatus FROM BookingRequests WHERE Id=@i AND CompanyId=@c`, { i: id, c: req.user!.companyId }))[0];
+    if (!cur) throw new HttpError(404, 'NOT_FOUND', 'Request not found');
+    if (cur.Status === 'cancelled' || cur.PaymentStatus === 'paid') throw new HttpError(409, 'PRICE_LOCKED', 'Price cannot change after payment or cancellation');
+    await query(`UPDATE BookingRequests SET Total=@t, UpdatedAt=SYSUTCDATETIME() WHERE Id=@i AND CompanyId=@c`, { t: Math.round(total * 100) / 100, i: id, c: req.user!.companyId });
+    res.json({ id, total });
   }),
 );
 

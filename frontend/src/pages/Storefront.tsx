@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type PointerEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, ApiError } from '../api';
+import { api, ApiError, fileToBase64 } from '../api';
 import { useI18n, type Key } from '../i18n';
 import { SectorIcon } from '../sectorIcons';
 import { ErrorBox, Modal, money, Skeleton } from '../ui';
@@ -19,17 +19,25 @@ interface Store {
 function RequestForm({ store, color, picked }: { store: Store; color: string; picked: string }) {
   const { t } = useI18n();
   const { customer } = useShop();
-  const [f, setF] = useState({ serviceId: picked, customerName: customer?.name ?? '', phone: customer?.phone ?? '', address: '', date: '', period: 'morning', notes: '', city: '', district: '' });
+  const [f, setF] = useState({ serviceId: picked, customerName: customer?.name ?? '', phone: customer?.phone ?? '', address: '', date: '', period: 'morning', notes: '', city: '', district: '', lat: 0, lng: 0, photo: '' });
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
-  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const locate = () => { if (!navigator.geolocation) return; navigator.geolocation.getCurrentPosition((p) => setF((x) => ({ ...x, lat: p.coords.latitude, lng: p.coords.longitude })), () => setError(t('locationFail')), { enableHighAccuracy: true, timeout: 15000 }); };
+  const pickPhoto = async (file?: File) => {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setError(t('imgTooBig')); return; }
+    setPhotoBusy(true);
+    try { const r = await api<{ url: string }>(`/market/companies/${store.slug}/photo`, { method: 'POST', body: { dataBase64: await fileToBase64(file) } }); setF((x) => ({ ...x, photo: r.url })); } catch { setError(t('imgFail')); } finally { setPhotoBusy(false); }
+  };
+  const set = (k: 'serviceId' | 'customerName' | 'phone' | 'address' | 'date' | 'period' | 'notes') => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   useEffect(() => { if (picked) setF((x) => ({ ...x, serviceId: picked })); }, [picked]);
   const today = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setError('');
     try {
-      await api(`/market/companies/${store.slug}/requests`, { method: 'POST', customer: !!customer, body: { serviceId: Number(f.serviceId), customerName: f.customerName, phone: f.phone, city: f.city || undefined, district: f.district || undefined, address: f.address || undefined, date: f.date, period: f.period, notes: f.notes || undefined } });
+      await api(`/market/companies/${store.slug}/requests`, { method: 'POST', customer: !!customer, body: { serviceId: Number(f.serviceId), customerName: f.customerName, phone: f.phone, city: f.city || undefined, district: f.district || undefined, address: f.address || undefined, date: f.date, period: f.period, lat: f.lat || undefined, lng: f.lng || undefined, photoUrl: f.photo || undefined, notes: f.notes || undefined } });
       setDone(true);
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Error'); } finally { setBusy(false); }
   };
@@ -48,6 +56,13 @@ function RequestForm({ store, color, picked }: { store: Store; color: string; pi
       </div>
       <AreaSelect areas={store.areas} city={f.city} district={f.district} onChange={(city, district) => setF({ ...f, city, district })} className={cls} />
       <input className={cls} placeholder={t('addressOpt')} value={f.address} onChange={set('address')} />
+      <div className="space-y-2">
+        <button type="button" onClick={locate} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-medium dark:border-slate-600">📍 {f.lat ? t('locationSet') : t('shareLocation')}</button>
+        <div className="flex items-center gap-3">
+          {f.photo && <img src={f.photo} alt="" className="h-14 w-20 rounded-lg object-cover" />}
+          <label className="cursor-pointer rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-medium dark:border-slate-600">{photoBusy ? t('loading') : f.photo ? t('replaceFile') : `📷 ${t('housePhoto')}`}<input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp" onChange={(e) => { void pickPhoto(e.target.files?.[0]); e.target.value = ''; }} /></label>
+        </div>
+      </div>
       <input className={cls} placeholder={t('notesOpt')} value={f.notes} onChange={set('notes')} />
       <button disabled={busy} className="tile w-full rounded-xl px-4 py-3 font-semibold text-white disabled:opacity-60" style={{ background: color }}>{t('sendRequest')}</button>
     </form>

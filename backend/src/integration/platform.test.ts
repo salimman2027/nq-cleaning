@@ -141,7 +141,7 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, city: 'الدمام' })).status, 400, 'city outside the service areas');
     assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, district: 'النرجس' })).status, 400, 'district outside the list');
     assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, city: undefined })).status, 400, 'city is required once the company lists areas');
-    assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send(ok)).status, 201);
+    assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, lat: 24.7136, lng: 46.6753 })).status, 201);
     assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, phone: '12345' })).status, 400);
     assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, date: '2020-01-01' })).status, 400);
     assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...ok, serviceId: svc + 9999 })).status, 400);
@@ -149,6 +149,11 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     const list = await request(app).get('/api/requests').set(auth(ownerToken));
     assert.equal(list.status, 200);
     assert.equal(list.body.items.length, 1);
+    assert.equal(Number(list.body.items[0].Latitude), 24.7136, 'location pin is kept');
+    const rid = list.body.items[0].Id;
+    assert.equal((await request(app).patch(`/api/requests/${rid}/total`).set(auth(ownerToken)).send({ total: 350.5 })).status, 200);
+    assert.equal(Number((await request(app).get('/api/requests').set(auth(ownerToken))).body.items[0].Total), 350.5, 'company can edit the price');
+    assert.equal((await request(app).patch(`/api/requests/${rid}/total`).set(auth(ownerToken)).send({ total: -1 })).status, 400);
     assert.equal((await request(app).get('/api/requests').set(auth(platToken))).status, 403);
     assert.equal((await request(app).patch(`/api/requests/${list.body.items[0].Id}`).set(auth(ownerToken)).send({ status: 'contacted' })).status, 200);
     const conf = await request(app).patch(`/api/requests/${list.body.items[0].Id}`).set(auth(ownerToken)).send({ status: 'confirmed' });

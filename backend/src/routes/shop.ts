@@ -74,6 +74,9 @@ const orderSchema = z.object({
   address: z.string().trim().min(3).max(300),
   notes: z.string().trim().max(500).optional(),
   paymentMethod: z.enum(['cash', 'card', 'tabby', 'tamara']),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+  photoUrl: z.string().regex(/^\/api\/media\/\d+$/).optional(),
 });
 
 shopRouter.post('/orders', customerAuth, h(async (req, res) => {
@@ -102,9 +105,9 @@ shopRouter.post('/orders', customerAuth, h(async (req, res) => {
   const total = Math.round(lines.reduce((a, l) => a + l.price * l.qty, 0) * 100) / 100;
   const id = await withTx(async (tx) => {
     const r = await query<{ Id: number }>(
-      `INSERT INTO BookingRequests (CompanyId, ServiceId, CustomerName, Phone, Address, PreferredDate, PreferredPeriod, Notes, CustomerId, PaymentMethod, Total, City, District)
-       OUTPUT inserted.Id VALUES (@c,@s,@n,@p,@a,@d,@pe,@no,@cu,'cash',@t,@ci,@di)`,
-      { ci: area.city, di: area.district, c: co.Id, s: lines[0].serviceId, n: cu.Name, p: cu.Phone, a: b.address, d: b.date, pe: b.period, no: b.notes ?? null, cu: req.customerId, t: money(total) }, tx);
+      `INSERT INTO BookingRequests (CompanyId, ServiceId, CustomerName, Phone, Address, PreferredDate, PreferredPeriod, Notes, CustomerId, PaymentMethod, Total, City, District, Latitude, Longitude, PhotoUrl)
+       OUTPUT inserted.Id VALUES (@c,@s,@n,@p,@a,@d,@pe,@no,@cu,'cash',@t,@ci,@di,@la,@ln,@ph)`,
+      { la: b.lat ?? null, ln: b.lng ?? null, ph: b.photoUrl ?? null, ci: area.city, di: area.district, c: co.Id, s: lines[0].serviceId, n: cu.Name, p: cu.Phone, a: b.address, d: b.date, pe: b.period, no: b.notes ?? null, cu: req.customerId, t: money(total) }, tx);
     for (const l of lines) await query(`INSERT INTO BookingRequestItems (RequestId, ServiceId, Name, UnitPrice, Qty) VALUES (@r,@s,@n,@u,@q)`, { r: r[0].Id, s: l.serviceId, n: l.name, u: money(l.price), q: l.qty }, tx);
     return Number(r[0].Id);
   });

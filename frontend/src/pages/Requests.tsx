@@ -4,7 +4,7 @@ import { useAuth } from '../auth';
 import { useI18n, type Key } from '../i18n';
 import { Button, ErrorBox, Modal, money, Skeleton } from '../ui';
 
-interface Req { Id: number; CustomerName: string; Phone: string; Address: string | null; PreferredDate: string; PreferredPeriod: string; Notes: string | null; Status: string; City: string | null; District: string | null; ServiceName: string; CreatedAt: string; PaymentStatus: string | null; Total: number | null; Items: { Name: string; Qty: number; UnitPrice: number }[] }
+interface Req { Id: number; CustomerName: string; Phone: string; Address: string | null; PreferredDate: string; PreferredPeriod: string; Notes: string | null; Status: string; City: string | null; District: string | null; ServiceName: string; CreatedAt: string; PaymentStatus: string | null; Total: number | null; Latitude?: number | null; Longitude?: number | null; PhotoUrl?: string | null; Items: { Name: string; Qty: number; UnitPrice: number }[] }
 type Period = 'day' | 'week' | 'month' | 'all';
 const STATUSES = ['new', 'contacted', 'confirmed', 'cancelled'] as const;
 const riyadh = (iso: string) => new Date(Date.parse(iso) + 3 * 3600_000).toISOString().slice(0, 10);
@@ -21,6 +21,9 @@ export default function Requests() {
   const [open, setOpen] = useState<Req | null>(null);
   const load = useCallback(() => { api<{ items: Req[] }>('/requests').then((r) => { setRows(r.items); setOpen((o) => (o ? r.items.find((x) => x.Id === o.Id) ?? null : o)); }).catch(() => setError('Error')); }, []);
   useEffect(load, [load]);
+  const [price, setPrice] = useState('');
+  useEffect(() => { setPrice(open?.Total != null ? String(open.Total) : ''); }, [open?.Id, open?.Total]);
+  const savePrice = async () => { try { await api(`/requests/${open!.Id}/total`, { method: 'PATCH', body: { total: Number(price) } }); load(); } catch { setError('Error'); } };
   const act = async (url: string, body: unknown) => { try { await api(url, { method: 'PATCH', body }); load(); } catch { setError('Error'); } };
 
   const today = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
@@ -77,6 +80,14 @@ export default function Requests() {
               <div><dt className="text-xs text-slate-500">{t('colPayment')}</dt><dd>{t('cashLbl')} · {open.Total == null ? '-' : open.PaymentStatus === 'paid' ? t('paid') : t('unpaid')}</dd></div>
             </dl>
             {open.Address && <p>{open.Address}</p>}
+            {open.Latitude != null && open.Longitude != null && <a href={`https://www.google.com/maps?q=${open.Latitude},${open.Longitude}`} target="_blank" rel="noreferrer" className="inline-block text-cyan-700 underline">📍 {t('openMap')}</a>}
+            {open.PhotoUrl && <a href={open.PhotoUrl} target="_blank" rel="noreferrer"><img src={open.PhotoUrl} alt="" className="max-h-56 rounded-xl object-cover" /></a>}
+            {can('bookings.update') && open.Status !== 'cancelled' && open.PaymentStatus !== 'paid' && (
+              <div className="flex items-end gap-2">
+                <label className="block flex-1 text-sm">{t('editPrice')}<input type="number" min="0" step="0.01" dir="ltr" value={price} onChange={(e) => setPrice(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-800" /></label>
+                <Button variant="ghost" disabled={price === '' || Number(price) < 0 || Number(price) === open.Total} onClick={() => void savePrice()}>{t('savePrice')}</Button>
+              </div>
+            )}
             {open.Notes && <p className="rounded-lg bg-slate-50 p-2 dark:bg-slate-800">{open.Notes}</p>}
             {open.Items.length > 0 && <ul className="rounded-lg border border-slate-200 p-2 dark:border-slate-700">{open.Items.map((i, k) => <li key={k} className="flex justify-between"><span>{i.Name} × {i.Qty}</span><span className="tabular-nums">{money(i.UnitPrice * i.Qty, lang)}</span></li>)}{open.Total != null && <li className="mt-1 flex justify-between border-t pt-1 font-bold dark:border-slate-700"><span>{t('total')}</span><span className="tabular-nums">{money(open.Total, lang)}</span></li>}</ul>}
             {can('bookings.update') && (
