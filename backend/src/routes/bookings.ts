@@ -8,7 +8,7 @@ import { backfillConfirmed } from '../services/requestSync';
 import { afterStatus } from '../services/ratings';
 import { config } from '../config';
 import { sniffMime } from '../lib/documents';
-import { stageFileForOffice } from './field';
+import { stageFileForOffice, stageLabels } from './field';
 import { calcTotals, lineTotal } from '../lib/pricing';
 import { REASON_REQUIRED, RELEASES_ASSIGNMENTS, STATUSES, canTransition, type BookingStatus } from '../lib/transitions';
 import { assertTechniciansFree } from '../services/scheduling';
@@ -115,7 +115,7 @@ bookingsRouter.get(
       query(`SELECT a.Id, a.TechnicianId, t.FullName, a.StartAt, a.EndAt, a.IsActive FROM BookingAssignments a JOIN Technicians t ON t.Id=a.TechnicianId WHERE a.BookingId=@i ORDER BY a.Id`, { i: id }),
       query(`SELECT h.FromStatus, h.ToStatus, h.Reason, h.ChangedBy, u.FullName AS ChangedByName, h.ChangedAt FROM BookingStatusHistory h LEFT JOIN Users u ON u.Id=h.ChangedBy WHERE h.BookingId=@i ORDER BY h.Id`, { i: id }),
     ]);
-    res.json({ ...rows[0], lines, assignments, history, teamFiles, stageEvents: stageEvents.map((e: Record<string, any>) => ({ ...e, FilesJson: undefined, Files: e.FilesJson ? JSON.parse(e.FilesJson) : [] })) });
+    res.json({ ...rows[0], lines, assignments, history, teamFiles, stageLabels: await stageLabels(req.user!.companyId), stageEvents: stageEvents.map((e: Record<string, any>) => ({ ...e, FilesJson: undefined, Files: e.FilesJson ? JSON.parse(e.FilesJson) : [] })) });
   }),
 );
 

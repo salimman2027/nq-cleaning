@@ -25,14 +25,16 @@ const MOVES: Partial<Record<Stage, { from: BookingStatus[]; to: BookingStatus }>
   finish: { from: ['in_progress'], to: 'awaiting_review' },
 };
 
-export interface StageRule { stage: Stage; noteReq: boolean; photoReq: boolean; videoReq: boolean }
+export interface StageRule { stage: Stage; noteReq: boolean; photoReq: boolean; videoReq: boolean; label: string | null; enabled: boolean }
+/** Stages a company may switch off; the others are the job's backbone (the status machine needs them). */
+export const OPTIONAL_STAGES: readonly string[] = ['progress', 'next'];
 
 export async function loadStageRules(companyId: number): Promise<StageRule[]> {
-  const rows = await query<Record<string, any>>(`SELECT Stage, NoteReq, PhotoReq, VideoReq FROM FieldStageSettings WHERE CompanyId=@c`, { c: companyId });
+  const rows = await query<Record<string, any>>(`SELECT Stage, NoteReq, PhotoReq, VideoReq, Label, Enabled FROM FieldStageSettings WHERE CompanyId=@c`, { c: companyId });
   return STAGES.map((s) => {
     const r = rows.find((x) => x.Stage === s);
     // Finishing also records the payment, so a proof photo (transfer receipt or cash) is required until the company says otherwise.
-    return { stage: s, noteReq: !!r?.NoteReq, photoReq: r ? !!r.PhotoReq : s === 'finish', videoReq: !!r?.VideoReq };
+    return { stage: s, noteReq: !!r?.NoteReq, photoReq: r ? !!r.PhotoReq : s === 'finish', videoReq: !!r?.VideoReq, label: r?.Label ?? null, enabled: OPTIONAL_STAGES.includes(s) ? r?.Enabled !== false && r?.Enabled !== 0 : true };
   });
 }
 
@@ -147,6 +149,7 @@ fieldRouter.post('/jobs/:id/events', requirePerm('field.work'), h(async (req, re
     return { name: f.fileName, data, ...k };
   });
   const rule = (await loadStageRules(companyId)).find((r) => r.stage === b.stage)!;
+  if (!rule.enabled) throw new HttpError(400, 'STAGE_DISABLED', 'This stage is switched off by the company');
   if (rule.noteReq && !b.note) throw new HttpError(400, 'NOTE_REQUIRED', 'A note is required for this stage');
   if (rule.photoReq && !files.some((f) => f.kind === 'photo')) throw new HttpError(400, 'PHOTO_REQUIRED', 'A photo is required for this stage');
   if (rule.videoReq && !files.some((f) => f.kind === 'video')) throw new HttpError(400, 'VIDEO_REQUIRED', 'A video is required for this stage');
@@ -206,3 +209,9 @@ async function sendFile(req: Request, res: import('express').Response, fid: numb
 fieldRouter.get('/files/:fid', requirePerm('field.work'), h(async (req, res) => sendFile(req, res, parse(idParam, req.params.fid), false)));
 /** Office staff look at the same log from the booking screen. */
 export const stageFileForOffice = (req: Request, res: import('express').Response, fid: number) => sendFile(req, res, fid, true);
+
+/** Custom stage names a company chose, by stage code. */
+export async function stageLabels(companyId: number): Promise<Record<string, string>> {
+  const rows = await query<{ Stage: string; Label: string }>(`SELECT Stage, Label FROM FieldStageSettings WHERE CompanyId=@c AND Label IS NOT NULL`, { c: companyId });
+  return Object.fromEntries(rows.map((r) => [r.Stage, r.Label]));
+}

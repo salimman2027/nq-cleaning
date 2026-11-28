@@ -7,7 +7,7 @@ import { shrink } from '../image';
 import { Button, ErrorBox, money, Skeleton } from '../ui';
 
 type Stage = 'depart' | 'arrive' | 'start' | 'progress' | 'finish' | 'cash' | 'next';
-interface Rule { stage: Stage; noteReq: boolean; photoReq: boolean; videoReq: boolean }
+interface Rule { stage: Stage; noteReq: boolean; photoReq: boolean; videoReq: boolean; label?: string | null; enabled?: boolean }
 interface Job {
   Id: number; BookingNo: string; Status: string; StartAt: string; Total: number; Paid: number; Notes: string | null;
   CustomerName: string; CustomerMobile: string; City: string | null; District: string | null; Street: string | null; MapUrl: string | null;
@@ -19,7 +19,20 @@ const ORDER: Stage[] = ['depart', 'arrive', 'start', 'progress', 'finish', 'cash
 const time = (iso: string) => new Date(iso).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Riyadh' });
 
 /** Which stages the supervisor can press right now, from the job status. */
-function available(j: Job): Stage[] {
+/** The company's stage rules: custom names and which optional stages are switched off. Loaded once per screen. */
+function useRules() {
+  const { t } = useI18n();
+  const [rules, setRules] = useState<Rule[]>([]);
+  useEffect(() => { api<{ items: Rule[] }>('/field/stages').then((r) => setRules(r.items)).catch(() => undefined); }, []);
+  const name = (s: Stage) => rules.find((r) => r.stage === s)?.label || t(`st_${s}` as Key);
+  const off = new Set(rules.filter((r) => r.enabled === false).map((r) => r.stage));
+  return { rules, name, off };
+}
+
+function available(j: Job, off?: Set<Stage>): Stage[] {
+  return rawAvailable(j).filter((s) => !off?.has(s));
+}
+function rawAvailable(j: Job): Stage[] {
   switch (j.Status) {
     case 'assigned': return ['depart'];
     case 'on_the_way': return ['arrive'];
@@ -76,14 +89,14 @@ export function FieldList() {
       )}
       {filter && <button type="button" onClick={() => setFilter('')} className="text-sm text-cyan-700 underline">{t('showAllJobs')}</button>}
       {!jobs ? <Skeleton rows={3} /> : jobs.length === 0 ? <p className="py-10 text-center text-slate-500">{t('noJobs')}</p> : jobs.map((j, i) => {
-        const next = available(j)[0];
+        const next = available(j, off)[0];
         return (
           <button key={j.Id} type="button" onClick={() => nav(`/app/field/${j.Id}`)} className={`block w-full rounded-2xl bg-white p-4 text-start shadow-sm ring-1 dark:bg-slate-900 ${i === 0 && !filter ? 'ring-2 ring-cyan-600' : 'ring-slate-200 dark:ring-slate-800'}`}>
             {i === 0 && !filter && <div className="mb-1 text-xs font-semibold text-cyan-700">{t('yourTurn')}</div>}
             <div className="flex items-center justify-between"><b>{j.CustomerName}</b><span className="text-sm text-slate-500" dir="ltr">{new Date(j.StartAt).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span></div>
             <div className="mt-1 text-sm text-slate-500">{[j.City, j.District].filter(Boolean).join(' / ')}</div>
             <div className="mt-1 text-sm">{j.Lines.map((l) => `${l.Name} × ${l.Quantity}`).join('، ')}</div>
-            {next && <div className="mt-2 inline-block rounded-full bg-cyan-700 px-3 py-1 text-sm text-white">{ICON[next]} {t(`st_${next}` as Key)}</div>}
+            {next && <div className="mt-2 inline-block rounded-full bg-cyan-700 px-3 py-1 text-sm text-white">{ICON[next]} {name(next)}</div>}
           </button>
         );
       })}
@@ -96,21 +109,21 @@ export function FieldJob() {
   const { t } = useI18n();
   const nav = useNavigate();
   const [job, setJob] = useState<Job | null>(null);
-  const [rules, setRules] = useState<Rule[]>([]);
+  const { rules, name, off } = useRules();
   const [stage, setStage] = useState<Stage | null>(null);
   const [err, setErr] = useState('');
   const load = useCallback(() => { api<Job>(`/field/jobs/${id}`).then(setJob).catch(() => setErr('Error')); }, [id]);
-  useEffect(() => { load(); api<{ items: Rule[] }>('/field/stages').then((r) => setRules(r.items)).catch(() => undefined); }, [load]);
+  useEffect(() => { load(); }, [load]);
   /** After "heading to the next job": open the next one in the queue, or go back to the list when nothing is left. */
   const goNext = async () => {
     try {
       const r = await api<{ items: Job[] }>('/field/jobs');
-      const nxt = r.items.find((j) => j.Id !== Number(id) && available(j).length > 0);
+      const nxt = r.items.find((j) => j.Id !== Number(id) && available(j, off).length > 0);
       nav(nxt ? `/app/field/${nxt.Id}` : '/app/field', { replace: true });
     } catch { nav('/app/field', { replace: true }); }
   };
   if (!job) return <div className="mx-auto max-w-xl">{err ? <ErrorBox message={err} /> : <Skeleton rows={4} />}</div>;
-  const can = available(job);
+  const can = available(job, off);
   const done = new Set(job.Events.map((e) => e.Stage));
   const due = Number(job.Total) - Number(job.Paid);
   const map = job.MapUrl || (job.Latitude != null ? `https://www.google.com/maps?q=${job.Latitude},${job.Longitude}` : '');
@@ -128,13 +141,13 @@ export function FieldJob() {
       </section>
       {err && <ErrorBox message={err} />}
       <ol className="space-y-2">
-        {ORDER.filter((s) => s !== 'cash' || can.includes('cash') || done.has('cash')).map((s) => {
+        {ORDER.filter((s) => !off.has(s) && (s !== 'cash' || can.includes('cash') || done.has('cash'))).map((s) => {
           const evs = job.Events.filter((e) => e.Stage === s);
           const ok = can.includes(s);
           return (
             <li key={s} className={`rounded-2xl p-3 ring-1 ${ok ? 'bg-cyan-50 ring-cyan-600 dark:bg-slate-900' : 'bg-white ring-slate-200 dark:bg-slate-900 dark:ring-slate-800'}`}>
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-lg">{done.has(s) ? '✔️' : ICON[s]} <span className="font-semibold">{t(`st_${s}` as Key)}</span></div>
+                <div className="flex items-center gap-2 text-lg">{done.has(s) ? '✔️' : ICON[s]} <span className="font-semibold">{name(s)}</span></div>
                 {ok && <Button className="!px-5 !py-3 text-base" onClick={() => setStage(s)}>{t('doIt')}</Button>}
               </div>
               {evs.map((e) => <div key={e.Id} className="mt-1 text-sm text-slate-600 dark:text-slate-300">{time(e.CreatedAt)}{e.Amount != null ? ` · ${money(e.Amount)}${e.Method === 'transfer' ? ` (${t('payTransfer')})` : ''}` : ''}{e.Note ? ` · ${e.Note}` : ''}{e.Files ? ` · 📎${e.Files}` : ''}</div>)}
@@ -187,7 +200,7 @@ function StageSheet({ job, stage, rule, due, onClose, onDone }: { job: Job; stag
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center" role="dialog" aria-modal="true">
       <div className="max-h-[92vh] w-full max-w-xl space-y-3 overflow-y-auto rounded-t-3xl bg-white p-5 dark:bg-slate-900 sm:rounded-3xl">
-        <div className="flex items-center justify-between"><h2 className="text-lg font-bold">{ICON[stage]} {t(`st_${stage}` as Key)}</h2><button type="button" onClick={onClose} className="text-2xl" aria-label={t('cancel')}>×</button></div>
+        <div className="flex items-center justify-between"><h2 className="text-lg font-bold">{ICON[stage]} {rule?.label || t(`st_${stage}` as Key)}</h2><button type="button" onClick={onClose} className="text-2xl" aria-label={t('cancel')}>×</button></div>
         {err && <ErrorBox message={err} />}
         {pays && <div className="flex gap-2">{(['cash', 'transfer'] as const).map((m) => <button key={m} type="button" aria-pressed={method === m} onClick={() => setMethod(m)} className={`flex-1 rounded-xl border-2 px-3 py-2 ${method === m ? 'border-cyan-700 bg-cyan-50 font-semibold dark:bg-slate-800' : 'border-slate-300 dark:border-slate-600'}`}>{m === 'cash' ? `💵 ${t('payCashLbl')}` : `🏦 ${t('payTransfer')}`}</button>)}</div>}
         {pays && <label className="block text-sm">{t('amountReceived')}<input type="number" inputMode="decimal" min={0} step="0.01" dir="ltr" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-3 text-lg dark:border-slate-600 dark:bg-slate-800" /></label>}
@@ -204,7 +217,7 @@ function StageSheet({ job, stage, rule, due, onClose, onDone }: { job: Job; stag
 }
 
 /** The office sees the same log on the booking screen. */
-export function StageLog({ bookingId, events }: { bookingId: number; events: { Id: number; Stage: Stage; Note: string | null; Amount: number | null; Method?: string | null; CreatedAt: string; ByName: string | null; Files: { Id: number; Kind: string; FileName: string }[] }[] }) {
+export function StageLog({ bookingId, events, labels = {} }: { bookingId: number; labels?: Record<string, string>; events: { Id: number; Stage: Stage; Note: string | null; Amount: number | null; Method?: string | null; CreatedAt: string; ByName: string | null; Files: { Id: number; Kind: string; FileName: string }[] }[] }) {
   const { t } = useI18n();
   if (events.length === 0) return null;
   return (
@@ -213,7 +226,7 @@ export function StageLog({ bookingId, events }: { bookingId: number; events: { I
       <ol className="space-y-2">
         {events.map((e) => (
           <li key={e.Id} className="text-sm">
-            <div>{ICON[e.Stage]} <b>{t(`st_${e.Stage}` as Key)}</b> · <span className="text-slate-500">{time(e.CreatedAt)}{e.ByName ? ` · ${e.ByName}` : ''}{e.Amount != null ? ` · ${money(e.Amount)}${e.Method === 'transfer' ? ` (${t('payTransfer')})` : ''}` : ''}</span></div>
+            <div>{ICON[e.Stage]} <b>{labels[e.Stage] || t(`st_${e.Stage}` as Key)}</b> · <span className="text-slate-500">{time(e.CreatedAt)}{e.ByName ? ` · ${e.ByName}` : ''}{e.Amount != null ? ` · ${money(e.Amount)}${e.Method === 'transfer' ? ` (${t('payTransfer')})` : ''}` : ''}</span></div>
             {e.Note && <div className="text-slate-600 dark:text-slate-300">{e.Note}</div>}
             {e.Files.length > 0 && <div className="mt-1 flex flex-wrap gap-2">{e.Files.map((f) => f.Kind === 'photo'
               ? <AuthImg key={f.Id} path={`/bookings/${bookingId}/stage-files/${f.Id}`} />

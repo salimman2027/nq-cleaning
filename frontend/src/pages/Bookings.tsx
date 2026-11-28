@@ -118,7 +118,7 @@ function BookingDetail({ id, onClose, onChanged }: { id: number; onClose: () => 
           {can('bookings.assign') && !['closed', 'cancelled'].includes(d.Status) && !['new', 'confirmed', 'awaiting_assignment', 'assigned', 'redo'].includes(d.Status) && <SupervisorPicker booking={d} onDone={() => { load(); onChanged(); }} onError={setErr} />}
           {can('bookings.assign') && ['new', 'confirmed', 'awaiting_assignment', 'assigned', 'redo'].includes(d.Status) && <AssignPanel booking={d} onDone={() => { load(); onChanged(); }} onError={setErr} />}
           {can('bookings.assign') && !['closed', 'cancelled'].includes(d.Status) && <TeamPanel booking={d} onDone={() => { load(); }} onError={setErr} />}
-          {(d.stageEvents?.length ?? 0) > 0 && <StageLog bookingId={d.Id} events={d.stageEvents!} />}
+          {(d.stageEvents?.length ?? 0) > 0 && <StageLog bookingId={d.Id} events={d.stageEvents!} labels={d.stageLabels} />}
           {can('bookings.status') && NEXT[d.Status]?.length > 0 && (
             <div className="flex flex-wrap gap-2">{NEXT[d.Status].map((s) => <Button key={s} variant={s === 'cancelled' ? 'danger' : 'ghost'} onClick={() => change(s)}>{label(s)}</Button>)}</div>
           )}

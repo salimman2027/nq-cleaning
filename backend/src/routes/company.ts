@@ -6,7 +6,7 @@ import { requirePerm, invalidateCompanyStatus } from '../auth/middleware';
 import { CR_RE, SLUG_RE, imageRef, VAT_RE, missingForReview, nationalAddressSchema } from '../lib/company';
 import { isCity } from '../lib/areas';
 import { loadSchedule } from '../services/slots';
-import { loadStageRules, STAGES } from './field';
+import { loadStageRules, OPTIONAL_STAGES, STAGES } from './field';
 import { DOC_KINDS, MAX_DOC_BYTES, isCompleteAddress, mismatches, safeFileName, sniffMime, type DocKind, type Extracted } from '../lib/documents';
 import { extractFromFile, extractionEnabled } from '../services/extract';
 
@@ -218,13 +218,13 @@ companyRouter.put('/schedule', requirePerm('company.profile.manage'), h(async (r
 /** For each field stage, which of note / photo / video the supervisor must provide. */
 companyRouter.get('/field-stages', requirePerm('technicians.manage'), h(async (req, res) => res.json({ items: await loadStageRules(req.user!.companyId) })));
 companyRouter.put('/field-stages', requirePerm('technicians.manage'), h(async (req, res) => {
-  const { items } = parse(z.object({ items: z.array(z.object({ stage: z.enum(STAGES), noteReq: z.boolean(), photoReq: z.boolean(), videoReq: z.boolean() })).max(20) }), req.body);
+  const { items } = parse(z.object({ items: z.array(z.object({ stage: z.enum(STAGES), noteReq: z.boolean(), photoReq: z.boolean(), videoReq: z.boolean(), label: z.string().trim().max(60).nullable().optional(), enabled: z.boolean().optional() })).max(20) }), req.body);
   for (const i of items) {
     await query(
       `MERGE FieldStageSettings AS t USING (SELECT @c AS CompanyId, @s AS Stage) AS s ON t.CompanyId=s.CompanyId AND t.Stage=s.Stage
-       WHEN MATCHED THEN UPDATE SET NoteReq=@n, PhotoReq=@p, VideoReq=@v
-       WHEN NOT MATCHED THEN INSERT (CompanyId, Stage, NoteReq, PhotoReq, VideoReq) VALUES (@c,@s,@n,@p,@v);`,
-      { c: req.user!.companyId, s: i.stage, n: i.noteReq ? 1 : 0, p: i.photoReq ? 1 : 0, v: i.videoReq ? 1 : 0 });
+       WHEN MATCHED THEN UPDATE SET NoteReq=@n, PhotoReq=@p, VideoReq=@v, Label=@l, Enabled=@e
+       WHEN NOT MATCHED THEN INSERT (CompanyId, Stage, NoteReq, PhotoReq, VideoReq, Label, Enabled) VALUES (@c,@s,@n,@p,@v,@l,@e);`,
+      { c: req.user!.companyId, s: i.stage, n: i.noteReq ? 1 : 0, p: i.photoReq ? 1 : 0, v: i.videoReq ? 1 : 0, l: i.label || null, e: OPTIONAL_STAGES.includes(i.stage) && i.enabled === false ? 0 : 1 });
   }
   res.json({ items: await loadStageRules(req.user!.companyId) });
 }));

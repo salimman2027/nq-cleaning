@@ -8,7 +8,7 @@ import ComplaintForm from './ComplaintForm';
 
 type Stage = 'depart' | 'arrive' | 'start' | 'progress' | 'finish' | 'cash';
 interface Track {
-  requestId: number; status: string; company: string; slug: string; requestedAt: string; confirmedAt: string | null;
+  labels?: Record<string, string>; disabled?: string[]; requestId: number; status: string; company: string; slug: string; requestedAt: string; confirmedAt: string | null;
   events: { id: number; stage: Stage; note: string | null; amount: number | null; at: string; files: { Id: number; Kind: string }[] }[];
 }
 const ORDER: Stage[] = ['depart', 'arrive', 'start', 'progress', 'finish', 'cash'];
@@ -32,12 +32,12 @@ export default function TrackOrder({ orderId, onClose }: { orderId: number; onCl
             <div>{t('confirmedAt')}: <b dir="ltr">{d.confirmedAt ? when(d.confirmedAt) : '—'}</b></div>
           </div>
           <ol className="space-y-2">
-            {ORDER.filter((s) => s !== 'cash' || d.events.some((e) => e.stage === 'cash')).map((s) => {
+            {ORDER.filter((s) => !d.disabled?.includes(s) && (s !== 'cash' || d.events.some((e) => e.stage === 'cash'))).map((s) => {
               const evs = d.events.filter((e) => e.stage === s);
               return (
                 <li key={s} className={`rounded-xl p-3 ring-1 ${evs.length ? 'ring-cyan-600' : 'ring-slate-200 dark:ring-slate-700'}`}>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold">{evs.length ? '✔️' : ICON[s]} {t(`st_${s}` as Key)}</span>
+                    <span className="font-semibold">{evs.length ? '✔️' : ICON[s]} {d.labels?.[s] || t(`st_${s}` as Key)}</span>
                     {evs.length > 0 && <button type="button" onClick={() => setComplain(s)} className="text-xs text-slate-500 underline">{t('complainStage')}</button>}
                   </div>
                   {evs.map((e) => (

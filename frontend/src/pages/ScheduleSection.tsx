@@ -26,11 +26,9 @@ export default function ScheduleSection({ canEdit }: { canEdit: boolean }) {
       <div><h2 className="font-semibold">{t('workHours')}</h2><p className="text-xs text-slate-500">{t('workHoursHint')}</p></div>
       {err && <ErrorBox message={err} />}
       {msg && <p className="text-sm text-green-700">{msg}</p>}
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm">{t('fromTime')}<input type="time" dir="ltr" disabled={!canEdit} value={s.open} onChange={(e) => setS({ ...s, open: e.target.value })} className={cls} /></label>
         <label className="text-sm">{t('toTime')}<input type="time" dir="ltr" disabled={!canEdit} value={s.close} onChange={(e) => setS({ ...s, close: e.target.value })} className={cls} /></label>
-        <label className="text-sm">{t('slotLen')}<select disabled={!canEdit} value={s.slotMinutes} onChange={(e) => setS({ ...s, slotMinutes: Number(e.target.value) })} className={cls}>{[60, 90, 120, 180, 240].map((m) => <option key={m} value={m}>{m} {t('slotMin')}</option>)}</select></label>
-        <label className="text-sm">{t('perSlot')}<input type="number" min={1} max={100} dir="ltr" disabled={!canEdit} value={s.maxPerSlot} onChange={(e) => setS({ ...s, maxPerSlot: Math.max(1, Number(e.target.value) || 1) })} className={cls} /></label>
       </div>
       <div className="flex flex-wrap gap-2">
         {DAYS.map(([d, ar, en]) => <button key={d} type="button" disabled={!canEdit} aria-pressed={s.days.includes(d)} onClick={() => toggle(d)} className={`rounded-full px-3 py-1.5 text-sm ring-1 ${s.days.includes(d) ? 'bg-cyan-700 text-white ring-cyan-700' : 'bg-white ring-slate-300 dark:bg-slate-800 dark:ring-slate-600'}`}>{lang === 'ar' ? ar : en}</button>)}

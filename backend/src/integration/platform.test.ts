@@ -463,6 +463,20 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).patch('/api/services/categories').set(auth(ownerToken)).send({ from: 'قسم معدّل', to: 'قسم معدّل' })).status, 200);
   });
 
+  test('field stages can be renamed and optional ones switched off', async () => {
+    const o = auth(ownerToken);
+    const cur = await request(app).get('/api/company/field-stages').set(o);
+    assert.equal(cur.status, 200);
+    const items = cur.body.items.map((r: Record<string, unknown>) => (r.stage === 'progress' ? { ...r, label: 'تصوير الشغل', enabled: false } : r.stage === 'depart' ? { ...r, label: 'طلعت لك', enabled: false } : r));
+    const put = await request(app).put('/api/company/field-stages').set(o).send({ items });
+    assert.equal(put.status, 200);
+    const pr = put.body.items.find((r: { stage: string }) => r.stage === 'progress');
+    assert.equal(pr.label, 'تصوير الشغل'); assert.equal(pr.enabled, false);
+    assert.equal(put.body.items.find((r: { stage: string }) => r.stage === 'depart').enabled, true, 'backbone stages cannot be switched off');
+    const back = put.body.items.map((r: Record<string, unknown>) => (r.stage === 'progress' ? { ...r, label: null, enabled: true } : r.stage === 'depart' ? { ...r, label: null } : r));
+    assert.equal((await request(app).put('/api/company/field-stages').set(o).send({ items: back })).status, 200);
+  });
+
   test('sectors group sections; the starter set adds sections without services', async () => {
     const o = auth(ownerToken);
     const mk = await request(app).post('/api/services/sectors').set(o).send({ name: 'قطاع تجريبي' });

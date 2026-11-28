@@ -9,6 +9,7 @@ import { HttpError, h, parse } from '../errors';
 import { isSaudiMobile } from '../lib/otp';
 import { normalizeMobile } from '../lib/phone';
 import { assertSlot, periodOf } from '../services/slots';
+import { loadStageRules, stageLabels } from './field';
 import { checkArea } from '../services/areas';
 
 /**
@@ -143,13 +144,16 @@ shopRouter.post('/orders/:id/complaints', customerAuth, h(async (req, res) => {
 shopRouter.get('/orders/:id/track', customerAuth, h(async (req, res) => {
   const id = parse(z.coerce.number().int().positive(), req.params.id);
   const o = (await query<Record<string, any>>(
-    `SELECT r.Id, r.Status, r.CreatedAt, r.BookingId, b.CreatedAt AS ConfirmedAt, b.Status AS JobStatus, c.Name AS CompanyName, c.Slug
+    `SELECT r.Id, r.Status, r.CreatedAt, r.BookingId, r.CompanyId, b.CreatedAt AS ConfirmedAt, b.Status AS JobStatus, c.Name AS CompanyName, c.Slug
        FROM BookingRequests r JOIN Companies c ON c.Id=r.CompanyId LEFT JOIN Bookings b ON b.Id=r.BookingId WHERE r.Id=@i AND r.CustomerId=@c`, { i: id, c: req.customerId }))[0];
   if (!o) throw new HttpError(404, 'NOT_FOUND', 'Order not found');
   const events = o.BookingId ? await query<Record<string, any>>(
     `SELECT e.Id, e.Stage, e.Note, e.Amount, e.Method, e.CreatedAt, (SELECT f.Id, f.Kind FROM BookingStageFiles f WHERE f.EventId=e.Id FOR JSON PATH) AS FilesJson
        FROM BookingStageEvents e WHERE e.BookingId=@b AND e.Stage<>'next' ORDER BY e.Id`, { b: o.BookingId }) : [];
+  const labels = await stageLabels(o.CompanyId);
+  const off = (await loadStageRules(o.CompanyId)).filter((r) => !r.enabled).map((r) => r.stage);
   res.json({
+    labels, disabled: off,
     requestId: o.Id, status: o.Status, company: o.CompanyName, slug: o.Slug, requestedAt: o.CreatedAt, confirmedAt: o.ConfirmedAt ?? null,
     events: events.map((e) => ({ id: e.Id, stage: e.Stage, note: e.Note, amount: e.Amount, method: e.Method, at: e.CreatedAt, files: e.FilesJson ? JSON.parse(e.FilesJson) : [] })),
   });
