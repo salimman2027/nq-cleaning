@@ -97,7 +97,7 @@ async function reportStats(days: number) {
     `SELECT TOP 8 City, COUNT(*) AS Requests FROM BookingRequests WHERE CreatedAt >= ${since} AND City IS NOT NULL AND Status<>'cancelled' GROUP BY City ORDER BY COUNT(*) DESC`, p);
   const [co] = await query<Record<string, number>>(`SELECT COUNT(*) AS Approved FROM Companies WHERE IsPlatform=0 AND Status='approved'`);
   const [rt] = await query<Record<string, number>>(`SELECT ROUND(AVG(CAST(Stars AS FLOAT)),2) AS Avg, COUNT(*) AS N FROM Ratings WHERE Stars IS NOT NULL`);
-  const [cp] = await query<Record<string, number>>(`SELECT COUNT(*) AS N FROM Complaints WHERE CreatedAt >= ${since}`);
+  const [cp] = await query<Record<string, number>>(`SELECT COUNT(*) AS N FROM Complaints WHERE CreatedAt >= ${since}`, p);
   const num = (v: unknown) => Number(v ?? 0);
   return {
     days, requests: num(tot?.Requests), confirmed: num(tot?.Confirmed), cancelled: num(tot?.Cancelled), waitingOver24h: num(tot?.WaitingOver24h), value: num(tot?.Value),
