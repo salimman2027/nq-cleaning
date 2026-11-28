@@ -276,6 +276,12 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).get(`/api/bookings/${bk.Id}/stage-files/${fid}`)).status, 401);
     assert.equal((await request(app).get(`/api/bookings/${bk.Id}/stage-files/${fid}`).set(auth(ownerToken))).status, 200);
     assert.equal((await request(app).post('/api/field/jobs/1/events').set(auth(ownerToken)).send({ stage: 'depart' })).status, 403, 'the owner is not a supervisor');
+    const sm = await request(app).get('/api/field/summary').set(auth(fT));
+    assert.equal(sm.status, 200);
+    assert.equal(sm.body.linked, true);
+    for (const k of ['upcoming', 'running', 'done', 'late', 'cashToday', 'cashDue']) assert.equal(typeof sm.body[k], 'number', k);
+    assert.ok(sm.body.cashToday >= Number(det.Total), 'cash collected today is counted');
+    for (const f of ['upcoming', 'progress', 'done', 'late']) assert.equal((await request(app).get(`/api/field/jobs?f=${f}`).set(auth(fT))).status, 200, f);
     const month = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 7);
     const today = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
     assert.equal((await request(app).post('/api/finance/expenses').set(auth(ownerToken)).send({ date: today, category: 'Fuel', amount: 150.5 })).status, 201);

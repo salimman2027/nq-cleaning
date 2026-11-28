@@ -25,28 +25,61 @@ function available(j: Job): Stage[] {
     case 'on_the_way': return ['arrive'];
     case 'arrived': return ['start'];
     case 'in_progress': return ['progress', 'finish'];
-    case 'awaiting_review': case 'done': case 'closed': return [...(Number(j.Paid) < Number(j.Total) ? ['cash' as Stage] : []), 'next'];
+    case 'awaiting_review': case 'done': case 'closed': return [...(Number(j.Paid) < Number(j.Total) ? ['cash' as Stage] : []), ...(j.Events.some((e) => e.Stage === 'next') ? [] : ['next' as Stage])];
     default: return [];
   }
 }
 
 
+interface Summary { linked: boolean; today: number; upcoming: number; running: number; done: number; late: number; cashToday: number; cashDue: number }
+type Filter = '' | 'upcoming' | 'progress' | 'done' | 'late';
+
+/** The supervisor's home: today's numbers, then the jobs, with the next one to work on first. */
 export function FieldList() {
   const { t } = useI18n();
   const nav = useNavigate();
   const [jobs, setJobs] = useState<Job[] | null>(null);
+  const [sum, setSum] = useState<Summary | null>(null);
+  const [filter, setFilter] = useState<Filter>('');
   const [linked, setLinked] = useState(true);
   const [err, setErr] = useState('');
-  useEffect(() => { api<{ items: Job[]; linked: boolean }>('/field/jobs').then((r) => { setJobs(r.items); setLinked(r.linked); }).catch(() => setErr('Error')); }, []);
+  useEffect(() => { api<Summary>('/field/summary').then(setSum).catch(() => undefined); }, []);
+  useEffect(() => {
+    setJobs(null);
+    api<{ items: Job[]; linked: boolean }>(`/field/jobs${filter ? `?f=${filter}` : ''}`).then((r) => { setJobs(r.items); setLinked(r.linked); }).catch(() => setErr('Error'));
+  }, [filter]);
+  const cards: { f: Filter; label: Key; n: number | undefined; tone: string }[] = [
+    { f: 'upcoming', label: 'dashUpcoming', n: sum?.upcoming, tone: 'text-slate-800 dark:text-slate-100' },
+    { f: 'progress', label: 'dashRunning', n: sum?.running, tone: 'text-cyan-700' },
+    { f: 'done', label: 'dashDone', n: sum?.done, tone: 'text-green-700' },
+    { f: 'late', label: 'dashLate', n: sum?.late, tone: 'text-red-600' },
+  ];
   return (
     <div className="mx-auto max-w-xl space-y-3">
       <h1 className="text-xl font-bold">{t('myJobs')}</h1>
       {err && <ErrorBox message={err} />}
       {!linked && <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">{t('notSupervisor')}</p>}
-      {!jobs ? <Skeleton rows={3} /> : jobs.length === 0 ? <p className="py-10 text-center text-slate-500">{t('noJobs')}</p> : jobs.map((j) => {
+      <div className="grid grid-cols-4 gap-2">
+        {cards.map((c) => (
+          <button key={c.f} type="button" onClick={() => setFilter(filter === c.f ? '' : c.f)} aria-pressed={filter === c.f}
+            className={`rounded-2xl bg-white p-3 text-center shadow-sm ring-1 dark:bg-slate-900 ${filter === c.f ? 'ring-2 ring-cyan-600' : 'ring-slate-200 dark:ring-slate-800'}`}>
+            <div className={`text-2xl font-bold tabular-nums ${c.tone}`}>{c.n ?? '–'}</div>
+            <div className="text-xs text-slate-500">{t(c.label)}</div>
+          </button>
+        ))}
+      </div>
+      {sum && (sum.cashToday > 0 || sum.cashDue > 0) && (
+        <div className="flex justify-between rounded-2xl bg-white px-4 py-3 text-sm shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
+          <span>💵 {t('cashToday')}: <b>{money(sum.cashToday)}</b></span>
+          <span>{t('cashDue')}: <b className={sum.cashDue > 0 ? 'text-amber-600' : ''}>{money(sum.cashDue)}</b></span>
+        </div>
+      )}
+      {filter && <button type="button" onClick={() => setFilter('')} className="text-sm text-cyan-700 underline">{t('showAllJobs')}</button>}
+      {!jobs ? <Skeleton rows={3} /> : jobs.length === 0 ? <p className="py-10 text-center text-slate-500">{t('noJobs')}</p> : jobs.map((j, i) => {
         const next = available(j)[0];
         return (
-          <button key={j.Id} type="button" onClick={() => nav(`/app/field/${j.Id}`)} className="block w-full rounded-2xl bg-white p-4 text-start shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
+          <button key={j.Id} type="button" onClick={() => nav(`/app/field/${j.Id}`)} className={`block w-full rounded-2xl bg-white p-4 text-start shadow-sm ring-1 dark:bg-slate-900 ${i === 0 && !filter ? 'ring-2 ring-cyan-600' : 'ring-slate-200 dark:ring-slate-800'}`}>
+            {i === 0 && !filter && <div className="mb-1 text-xs font-semibold text-cyan-700">{t('yourTurn')}</div>}
             <div className="flex items-center justify-between"><b>{j.CustomerName}</b><span className="text-sm text-slate-500" dir="ltr">{new Date(j.StartAt).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span></div>
             <div className="mt-1 text-sm text-slate-500">{[j.City, j.District].filter(Boolean).join(' / ')}</div>
             <div className="mt-1 text-sm">{j.Lines.map((l) => `${l.Name} × ${l.Quantity}`).join('، ')}</div>
@@ -68,6 +101,14 @@ export function FieldJob() {
   const [err, setErr] = useState('');
   const load = useCallback(() => { api<Job>(`/field/jobs/${id}`).then(setJob).catch(() => setErr('Error')); }, [id]);
   useEffect(() => { load(); api<{ items: Rule[] }>('/field/stages').then((r) => setRules(r.items)).catch(() => undefined); }, [load]);
+  /** After "heading to the next job": open the next one in the queue, or go back to the list when nothing is left. */
+  const goNext = async () => {
+    try {
+      const r = await api<{ items: Job[] }>('/field/jobs');
+      const nxt = r.items.find((j) => j.Id !== Number(id) && available(j).length > 0);
+      nav(nxt ? `/app/field/${nxt.Id}` : '/app/field', { replace: true });
+    } catch { nav('/app/field', { replace: true }); }
+  };
   if (!job) return <div className="mx-auto max-w-xl">{err ? <ErrorBox message={err} /> : <Skeleton rows={4} />}</div>;
   const can = available(job);
   const done = new Set(job.Events.map((e) => e.Stage));
@@ -101,7 +142,7 @@ export function FieldJob() {
           );
         })}
       </ol>
-      {stage && <StageSheet job={job} stage={stage} rule={rules.find((r) => r.stage === stage)} due={due} onClose={() => setStage(null)} onDone={() => { setStage(null); load(); }} />}
+      {stage && <StageSheet job={job} stage={stage} rule={rules.find((r) => r.stage === stage)} due={due} onClose={() => setStage(null)} onDone={() => { const was = stage; setStage(null); if (was === 'next') void goNext(); else load(); }} />}
     </div>
   );
 }

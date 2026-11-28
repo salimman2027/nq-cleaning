@@ -71,14 +71,49 @@ async function decorate(rows: Record<string, any>[], companyId: number) {
 
 fieldRouter.get('/stages', requirePerm('field.work'), h(async (req, res) => res.json({ items: await loadStageRules(req.user!.companyId) })));
 
+const TODAY = `CAST(DATEADD(hour,3,b.StartAt) AS date) = CAST(DATEADD(hour,3,SYSUTCDATETIME()) AS date)`;
+const SCHEDULED = `b.Status IN ('confirmed','assigned')`;
+const RUNNING = `b.Status IN ('on_the_way','arrived','in_progress','paused')`;
+const FINISHED = `b.Status IN ('awaiting_review','done','closed')`;
+const LATE = `((${SCHEDULED} AND b.StartAt < SYSUTCDATETIME()) OR (${RUNNING} AND b.EndAt < SYSUTCDATETIME())) AND b.StartAt >= DATEADD(day,-3,SYSUTCDATETIME())`;
+/** The filters of the supervisor dashboard. Without one, the list is the jobs still to work on (and finished ones with cash still due). */
+const FILTERS: Record<string, string> = {
+  upcoming: `${TODAY} AND ${SCHEDULED} AND b.StartAt >= SYSUTCDATETIME()`,
+  progress: `${RUNNING}`,
+  done: `${TODAY} AND ${FINISHED}`,
+  late: LATE,
+};
+
 fieldRouter.get('/jobs', requirePerm('field.work'), h(async (req, res) => {
   const s = await mySupervisorId(req).catch(() => null);
   if (s === null) { res.json({ items: [], linked: false }); return; }
-  const rows = await query<Record<string, any>>(
-    `${JOB_SQL} AND ((b.Status IN ('assigned','on_the_way','arrived','in_progress','paused') AND b.StartAt >= DATEADD(day,-3,SYSUTCDATETIME()) AND b.StartAt < DATEADD(day,8,SYSUTCDATETIME()))
-                 OR (b.Status IN ('awaiting_review','done') AND b.Paid < b.Total AND b.StartAt >= DATEADD(day,-3,SYSUTCDATETIME())))
-     ORDER BY b.StartAt`, { c: req.user!.companyId, s });
+  const f = typeof req.query.f === 'string' ? req.query.f : '';
+  const cond = FILTERS[f]
+    ? `AND (${FILTERS[f]})`
+    : `AND ((b.Status IN ('assigned','on_the_way','arrived','in_progress','paused') AND b.StartAt >= DATEADD(day,-3,SYSUTCDATETIME()) AND b.StartAt < DATEADD(day,8,SYSUTCDATETIME()))
+         OR (b.Status IN ('awaiting_review','done') AND b.Paid < b.Total AND b.StartAt >= DATEADD(day,-3,SYSUTCDATETIME())))`;
+  const rows = await query<Record<string, any>>(`${JOB_SQL} ${cond} ORDER BY b.StartAt`, { c: req.user!.companyId, s });
   res.json({ items: await decorate(rows, req.user!.companyId), linked: true });
+}));
+
+/** Numbers for the supervisor's own dashboard: today's agenda, what is running, what is done, what is late, and cash. */
+fieldRouter.get('/summary', requirePerm('field.work'), h(async (req, res) => {
+  const s = await mySupervisorId(req).catch(() => null);
+  if (s === null) { res.json({ linked: false }); return; }
+  const c = req.user!.companyId;
+  const r = (await query<Record<string, any>>(
+    `SELECT SUM(CASE WHEN ${TODAY} AND ${SCHEDULED} AND b.StartAt >= SYSUTCDATETIME() THEN 1 ELSE 0 END) AS Upcoming,
+            SUM(CASE WHEN ${RUNNING} THEN 1 ELSE 0 END) AS Running,
+            SUM(CASE WHEN ${TODAY} AND ${FINISHED} THEN 1 ELSE 0 END) AS Done,
+            SUM(CASE WHEN ${LATE} THEN 1 ELSE 0 END) AS Late,
+            SUM(CASE WHEN ${TODAY} THEN 1 ELSE 0 END) AS Today
+       FROM Bookings b WHERE b.CompanyId=@c AND b.IsDeleted=0 AND b.SupervisorId=@s AND b.Status NOT IN ('cancelled','postponed')`, { c, s }))[0];
+  const cash = (await query<Record<string, any>>(
+    `SELECT ISNULL(SUM(e.Amount),0) AS Collected FROM BookingStageEvents e JOIN Bookings b ON b.Id=e.BookingId
+      WHERE e.CompanyId=@c AND b.SupervisorId=@s AND e.Stage='cash' AND CAST(DATEADD(hour,3,e.CreatedAt) AS date) = CAST(DATEADD(hour,3,SYSUTCDATETIME()) AS date)`, { c, s }))[0];
+  const due = (await query<Record<string, any>>(
+    `SELECT ISNULL(SUM(b.Total-b.Paid),0) AS Due FROM Bookings b WHERE b.CompanyId=@c AND b.IsDeleted=0 AND b.SupervisorId=@s AND ${FINISHED} AND b.Paid < b.Total AND b.StartAt >= DATEADD(day,-30,SYSUTCDATETIME())`, { c, s }))[0];
+  res.json({ linked: true, today: Number(r.Today ?? 0), upcoming: Number(r.Upcoming ?? 0), running: Number(r.Running ?? 0), done: Number(r.Done ?? 0), late: Number(r.Late ?? 0), cashToday: Number(cash.Collected), cashDue: Number(due.Due) });
 }));
 
 fieldRouter.get('/jobs/:id', requirePerm('field.work'), h(async (req, res) => {
