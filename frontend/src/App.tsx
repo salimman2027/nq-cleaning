@@ -25,6 +25,7 @@ import Finance from './pages/Finance';
 import StaffReport from './pages/StaffReport';
 import Review from './pages/Review';
 import Settings from './pages/Settings';
+import AiReport from './pages/AiReport';
 import Ratings from './pages/Ratings';
 import Reports from './pages/Reports';
 import Rate from './pages/Rate';
@@ -34,6 +35,7 @@ const NAV: { to: string; key: Key; perm: string; icon: string }[] = [
   { to: '/app/review', key: 'review', perm: 'platform.companies.view', icon: '✅' },
   { to: '/app/monitor', key: 'monitor', perm: 'platform.companies.view', icon: '📊' },
   { to: '/app/complaints', key: 'complaints', perm: 'platform.companies.view', icon: '🚩' },
+  { to: '/app/ai-report', key: 'aiReportNav', perm: 'platform.brand.manage', icon: '🤖' },
   { to: '/app/settings', key: 'settings', perm: 'platform.brand.manage', icon: '⚙' },
   { to: '/app/field', key: 'fieldApp', perm: 'field.work', icon: '🧭' },
   { to: '/app/company', key: 'company', perm: 'company.profile.manage', icon: '🏢' },
@@ -131,6 +133,7 @@ export default function App() {
         <Route path="monitor" element={<Monitor />} />
         <Route path="complaints" element={<Complaints />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="ai-report" element={<AiReport />} />
         <Route path="requests" element={<Requests />} />
         <Route path="bookings" element={<Bookings />} />
         <Route path="customers" element={<Customers />} />

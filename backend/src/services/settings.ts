@@ -96,3 +96,35 @@ export function assertPublicHttps(raw: string): void {
     throw new HttpError(400, 'VALIDATION_ERROR', 'The gateway URL must be a public address');
   }
 }
+
+/** ---- AI provider (platform level): which model writes the reports, and its API key (encrypted, never sent back) ---- */
+export const PROVIDERS = ['claude', 'gemini', 'openai'] as const;
+export type Provider = (typeof PROVIDERS)[number];
+export const DEFAULT_MODEL: Record<Provider, string> = { claude: 'claude-sonnet-4-5', gemini: 'gemini-2.0-flash', openai: 'gpt-4o-mini' };
+export interface AiSettings { provider: Provider; model: string; apiKeyEnc: string | null }
+
+async function readKey<T>(key: string): Promise<T | null> {
+  const r = await query<{ Value: string }>(`SELECT s.Value FROM SystemSettings s JOIN Companies c ON c.Id=s.CompanyId WHERE c.IsPlatform=1 AND s.[Key]=@k`, { k: key });
+  return r[0]?.Value ? (JSON.parse(r[0].Value) as T) : null;
+}
+async function writeKey(key: string, value: unknown): Promise<void> {
+  const c = await platformId();
+  await query(
+    `MERGE SystemSettings AS t USING (SELECT @c AS CompanyId, @k AS [Key]) AS s ON t.CompanyId=s.CompanyId AND t.[Key]=s.[Key]
+     WHEN MATCHED THEN UPDATE SET Value=@v WHEN NOT MATCHED THEN INSERT (CompanyId,[Key],Value) VALUES (@c,@k,@v);`,
+    { c, k: key, v: JSON.stringify(value) },
+  );
+}
+export async function getAi(): Promise<AiSettings> {
+  const j = await readKey<Partial<AiSettings>>('ai');
+  const provider = PROVIDERS.includes(j?.provider as Provider) ? (j!.provider as Provider) : 'claude';
+  return { provider, model: j?.model || DEFAULT_MODEL[provider], apiKeyEnc: j?.apiKeyEnc ?? null };
+}
+export const saveAi = (a: AiSettings) => writeKey('ai', a);
+export function aiPublicView(a: AiSettings) {
+  let hint: string | null = null;
+  if (a.apiKeyEnc) { try { hint = `••••${decrypt(a.apiKeyEnc).slice(-4)}`; } catch { hint = '••••'; } }
+  return { provider: a.provider, model: a.model, keySet: !!a.apiKeyEnc, keyHint: hint, defaults: DEFAULT_MODEL };
+}
+export const getSavedReport = () => readKey<{ at: string; days: number; provider: string; model: string; text: string }>('ai_report');
+export const saveReport = (r: { at: string; days: number; provider: string; model: string; text: string }) => writeKey('ai_report', r);

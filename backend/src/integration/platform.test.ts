@@ -477,6 +477,24 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).put('/api/company/field-stages').set(o).send({ items: back })).status, 200);
   });
 
+  test('platform AI settings keep the key secret; the report shows real figures and needs a key for the narrative', async () => {
+    const adm = auth(platToken);
+    const put = await request(app).put('/api/platform/settings/ai').set(adm).send({ provider: 'gemini', apiKey: 'AIza-test-key-123456' });
+    assert.equal(put.status, 200);
+    assert.equal(put.body.provider, 'gemini'); assert.equal(put.body.keySet, true); assert.equal(put.body.keyHint, '••••3456');
+    assert.ok(!JSON.stringify(put.body).includes('AIza-test'), 'the key is never returned');
+    assert.equal((await request(app).put('/api/platform/settings/ai').set(adm).send({ provider: 'bing' })).status, 400);
+    assert.equal((await request(app).put('/api/platform/settings/ai').set(auth(ownerToken)).send({ provider: 'claude' })).status, 403);
+    const clr = await request(app).put('/api/platform/settings/ai').set(adm).send({ provider: 'claude', clearApiKey: true });
+    assert.equal(clr.body.keySet, false);
+    const rep = await request(app).get('/api/platform/ai-report?days=30').set(adm);
+    assert.equal(rep.status, 200);
+    assert.equal(rep.body.configured, false);
+    assert.equal(typeof rep.body.stats.requests, 'number');
+    assert.ok(Array.isArray(rep.body.stats.topServices));
+    assert.equal((await request(app).post('/api/platform/ai-report').set(adm).send({ days: 30 })).status, 400, 'no key, no narrative');
+  });
+
   test('sectors group sections; the starter set adds sections without services', async () => {
     const o = auth(ownerToken);
     const mk = await request(app).post('/api/services/sectors').set(o).send({ name: 'قطاع تجريبي' });
