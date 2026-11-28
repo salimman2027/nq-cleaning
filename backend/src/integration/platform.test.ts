@@ -253,7 +253,7 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).get('/api/bookings').set(auth(fT))).status, 403, 'a field login cannot open the office screens');
     assert.equal((await request(app).put('/api/company/field-stages').set(auth(ownerToken)).send({ items: [{ stage: 'arrive', noteReq: false, photoReq: true, videoReq: false }] })).status, 200);
     const ev = (body: object, token = fT) => request(app).post(`/api/field/jobs/${bk.Id}/events`).set(auth(token)).send(body);
-    assert.equal((await ev({ stage: 'arrive' })).status, 409, 'cannot arrive before leaving');
+    assert.equal((await ev({ stage: 'arrive', files: [{ fileName: 'a.png', dataBase64: png }] })).status, 409, 'cannot arrive before leaving');
     assert.equal((await ev({ stage: 'depart' })).status, 201);
     assert.equal((await ev({ stage: 'arrive' })).status, 400, 'photo required at arrival');
     assert.equal((await ev({ stage: 'arrive', files: [{ fileName: 'a.png', dataBase64: png }] })).status, 201);
