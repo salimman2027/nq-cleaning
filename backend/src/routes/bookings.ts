@@ -33,6 +33,7 @@ const createSchema = z
     source: z.enum(SOURCES).optional(),
     priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
     notes: z.string().max(2000).optional(),
+    photoUrl: z.string().regex(/^\/api\/media\/\d+$/).optional(),
     confirmed: z.boolean().default(false),
     idempotencyKey: z.string().min(8).max(64).optional(),
   })
@@ -179,10 +180,10 @@ bookingsRouter.post(
 
         const status: BookingStatus = b.technicianIds.length ? 'assigned' : b.confirmed ? 'confirmed' : 'new';
         const ins = await query<{ Id: number; BookingNo: string }>(
-          `INSERT INTO Bookings (CompanyId, BranchId, BookingNo, CustomerId, AddressId, StartAt, EndAt, Status, Subtotal, Discount, Vat, Total, IdempotencyKey, Source, Priority, Notes, CreatedBy)
+          `INSERT INTO Bookings (CompanyId, BranchId, BookingNo, CustomerId, AddressId, StartAt, EndAt, Status, Subtotal, Discount, Vat, Total, IdempotencyKey, Source, Priority, Notes, CreatedBy, PhotoUrl)
            OUTPUT INSERTED.Id, INSERTED.BookingNo
-           VALUES (@c, @br, 'BK-' + RIGHT('000000' + CAST(NEXT VALUE FOR BookingNoSeq AS VARCHAR(12)), 6), @cu, @ad, @s, @e, @st, @sub, @di, @vat, @tot, @k, @src, @pr, @n, @u)`,
-          { c: u.companyId, br: branchId, cu: b.customerId, ad: b.addressId, s: dt(b.startAt), e: dt(endAt), st: status, sub: money(totals.subtotal), di: money(totals.discount), vat: money(totals.vat), tot: money(totals.total), k: b.idempotencyKey ?? null, src: b.source ?? null, pr: b.priority, n: b.notes ?? null, u: u.id },
+           VALUES (@c, @br, 'BK-' + RIGHT('000000' + CAST(NEXT VALUE FOR BookingNoSeq AS VARCHAR(12)), 6), @cu, @ad, @s, @e, @st, @sub, @di, @vat, @tot, @k, @src, @pr, @n, @u, @ph)`,
+          { c: u.companyId, br: branchId, cu: b.customerId, ad: b.addressId, s: dt(b.startAt), e: dt(endAt), st: status, sub: money(totals.subtotal), di: money(totals.discount), vat: money(totals.vat), tot: money(totals.total), k: b.idempotencyKey ?? null, ph: b.photoUrl ?? null, src: b.source ?? null, pr: b.priority, n: b.notes ?? null, u: u.id },
           tx,
         );
         const id = Number(ins[0].Id);

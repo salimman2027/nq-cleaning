@@ -53,7 +53,7 @@ async function mySupervisorId(req: Request): Promise<number> {
 }
 
 const JOB_SQL = `SELECT b.Id, b.BookingNo, b.Status, b.StartAt, b.EndAt, b.Total, b.Paid, b.Notes, c.Name AS CustomerName, c.Mobile AS CustomerMobile,
-       a.City, a.District, a.Street, a.MapUrl, r.Latitude, r.Longitude, r.PhotoUrl
+       a.City, a.District, a.Street, a.MapUrl, r.Latitude, r.Longitude, COALESCE(b.PhotoUrl, r.PhotoUrl) AS PhotoUrl
   FROM Bookings b JOIN Customers c ON c.Id=b.CustomerId JOIN CustomerAddresses a ON a.Id=b.AddressId
   LEFT JOIN BookingRequests r ON r.BookingId=b.Id
  WHERE b.CompanyId=@c AND b.IsDeleted=0 AND b.SupervisorId=@s`;

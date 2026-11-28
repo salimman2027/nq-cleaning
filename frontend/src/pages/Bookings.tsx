@@ -4,7 +4,7 @@ import { api, ApiError, fileToBase64, openFile } from '../api';
 import { useAuth } from '../auth';
 import { STATUS_LABEL, useI18n } from '../i18n';
 import { StageLog } from './Field';
-import { Button, dateTime, ErrorBox, Field, Input, Modal, money, Select, Skeleton } from '../ui';
+import { Button, dateTime, ErrorBox, Field, ImageUpload, Input, Modal, money, Select, Skeleton } from '../ui';
 
 interface Row { Id: number; BookingNo: string; Status: string; StartAt: string; EndAt: string; Total: number; Paid: number; CustomerName: string; CustomerMobile: string; TechnicianCount: number }
 interface Detail extends Row {
@@ -25,6 +25,12 @@ const NEXT: Record<string, string[]> = {
   redo: ['assigned', 'awaiting_assignment', 'cancelled'], postponed: ['confirmed', 'awaiting_assignment', 'cancelled'], closed: [], cancelled: [],
 };
 const NEEDS_REASON = ['cancelled', 'postponed', 'redo', 'paused'];
+
+const BADGE: Record<string, string> = {
+  new: 'bg-amber-100 text-amber-800', confirmed: 'bg-sky-100 text-sky-800', assigned: 'bg-sky-100 text-sky-800', on_the_way: 'bg-indigo-100 text-indigo-800', arrived: 'bg-indigo-100 text-indigo-800',
+  in_progress: 'bg-indigo-100 text-indigo-800', paused: 'bg-orange-100 text-orange-800', awaiting_review: 'bg-violet-100 text-violet-800', done: 'bg-emerald-100 text-emerald-800', closed: 'bg-emerald-100 text-emerald-800', cancelled: 'bg-red-100 text-red-800',
+};
+const badge = (s: string) => BADGE[s] ?? 'bg-slate-100 text-slate-700';
 
 export function useStatusLabel() {
   const { lang } = useI18n();
@@ -64,7 +70,7 @@ export default function Bookings() {
             <tbody>{rows.map((r) => (
               <tr key={r.Id} onClick={() => setOpenId(r.Id)} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800">
                 <td className="p-3">{r.BookingNo}</td><td className="p-3">{r.CustomerName}</td><td className="p-3">{dateTime(r.StartAt, lang)}</td>
-                <td className="p-3">{label(r.Status)}</td><td className="p-3">{money(r.Total, lang)}</td>
+                <td className="p-3"><span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${badge(r.Status)}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{label(r.Status)}</span></td><td className="p-3">{money(r.Total, lang)}</td>
               </tr>))}
             </tbody>
           </table>
@@ -253,11 +259,11 @@ function NewBooking({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   const { t, lang } = useI18n();
   const { can, me } = useAuth();
   const key = useRef(typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `k-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  const [q, setQ] = useState('');
-  const [found, setFound] = useState<Cust[]>([]);
-  const [cust, setCust] = useState<Cust | null>(null);
-  const [addresses, setAddresses] = useState<{ Id: number; City: string | null; District: string | null; Street: string | null }[]>([]);
-  const [addressId, setAddressId] = useState('');
+  const [name, setName] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [mapUrl, setMapUrl] = useState('');
+  const [addr, setAddr] = useState('');
+  const [photo, setPhoto] = useState('');
   const [services, setServices] = useState<Svc[]>([]);
   const [lines, setLines] = useState<{ serviceId: string; quantity: string; price: string }[]>([{ serviceId: '', quantity: '1', price: '' }]);
   const [branches, setBranches] = useState<{ Id: number; Name: string }[]>([]);
@@ -266,7 +272,6 @@ function NewBooking({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   const [minutes, setMinutes] = useState('120');
   const [techs, setTechs] = useState<{ Id: number; FullName: string }[]>([]);
   const [sel, setSel] = useState<number[]>([]);
-  const [discount, setDiscount] = useState('0');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -275,19 +280,6 @@ function NewBooking({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
     api<{ items: { Id: number; Name: string }[] }>('/branches').then((r) => { setBranches(r.items); if (!branchId && r.items.length === 1) setBranchId(String(r.items[0].Id)); }).catch(() => undefined);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (q.trim().length < 2) { setFound([]); return; }
-    const id = setTimeout(() => { api<{ items: Cust[] }>(`/customers?q=${encodeURIComponent(q)}&pageSize=5`).then((r) => setFound(r.items)).catch(() => undefined); }, 250);
-    return () => clearTimeout(id);
-  }, [q]);
-
-  const pick = async (c: Cust) => {
-    setCust(c); setFound([]); setQ('');
-    const full = await api<{ addresses: { Id: number; City: string | null; District: string | null; Street: string | null }[] }>(`/customers/${c.Id}`);
-    setAddresses(full.addresses);
-    setAddressId(full.addresses[0] ? String(full.addresses[0].Id) : '');
-  };
 
   const endIso = start ? new Date(new Date(start).getTime() + Number(minutes) * 60000).toISOString() : '';
   useEffect(() => {
@@ -305,22 +297,36 @@ function NewBooking({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
     if (total) setMinutes(String(total));
   };
 
+  /** Finds the customer by mobile (or creates them) and saves the Google Maps link as one of their addresses. */
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!cust) { setErr(t('customer')); return; }
     setBusy(true); setErr('');
     try {
+      const digits = mobile.replace(/\D/g, '');
+      if (!/^0?5\d{8}$|^9665\d{8}$/.test(digits)) { setErr(t('badMobile')); setBusy(false); return; }
+      const found = await api<{ items: Cust[] }>(`/customers?q=${encodeURIComponent(digits)}&pageSize=10`);
+      const hit = found.items.find((c) => c.Mobile.replace(/\D/g, '').slice(-9) === digits.slice(-9));
+      const address = { label: t('bookingPlace'), mapUrl: mapUrl.trim(), street: addr.trim() || undefined };
+      let customerId: number; let addressId: number;
+      if (hit) {
+        customerId = hit.Id;
+        addressId = (await api<{ id: number }>(`/customers/${hit.Id}/addresses`, { method: 'POST', body: address })).id;
+      } else {
+        customerId = (await api<{ id: number }>('/customers', { method: 'POST', body: { name: name.trim(), mobile: digits, addresses: [address] } })).id;
+        const full = await api<{ addresses: { Id: number }[] }>(`/customers/${customerId}`);
+        addressId = full.addresses[full.addresses.length - 1].Id;
+      }
       await api('/bookings', {
         method: 'POST',
         body: {
-          customerId: cust.Id, addressId: Number(addressId), branchId: branchId ? Number(branchId) : undefined,
-          startAt: new Date(start).toISOString(), endAt: endIso,
+          customerId, addressId, branchId: branchId ? Number(branchId) : undefined,
+          startAt: new Date(start).toISOString(), endAt: endIso, photoUrl: photo || undefined,
           lines: lines.filter((l) => l.serviceId).map((l) => {
             const cat = services.find((x) => String(x.Id) === l.serviceId)?.CurrentPrice;
             const custom = l.price !== '' && Number(l.price) !== cat;
             return { serviceId: Number(l.serviceId), quantity: Number(l.quantity), ...(custom ? { unitPrice: Number(l.price) } : {}) };
           }),
-          technicianIds: sel, discount: Number(discount) || 0, source: 'phone', idempotencyKey: key.current,
+          technicianIds: sel, source: 'phone', idempotencyKey: key.current,
         },
       });
       onSaved();
@@ -333,15 +339,13 @@ function NewBooking({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   return (
     <Modal title={t('newBooking')} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
-        <Field label={t('customer')}>
-          {cust ? <div className="flex items-center gap-2"><span>{cust.Name} · <span dir="ltr">{cust.Mobile}</span></span><button type="button" className="text-sm text-cyan-700" onClick={() => setCust(null)}>×</button></div> : (
-            <div className="relative">
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`${t('name')} / ${t('mobile')} / ${t('code')}`} />
-              {found.length > 0 && <div className="absolute z-10 mt-1 w-full rounded-lg border bg-white shadow dark:border-slate-700 dark:bg-slate-800">{found.map((c) => <button type="button" key={c.Id} onClick={() => pick(c)} className="block w-full px-3 py-2 text-start hover:bg-slate-100 dark:hover:bg-slate-700">{c.Name} · <span dir="ltr">{c.Mobile}</span></button>)}</div>}
-            </div>
-          )}
-        </Field>
-        {cust && <Field label={t('address')}><Select required value={addressId} onChange={(e) => setAddressId(e.target.value)}>{addresses.map((a) => <option key={a.Id} value={a.Id}>{[a.City, a.District, a.Street].filter(Boolean).join(' - ') || `#${a.Id}`}</option>)}</Select></Field>}
+        <div className="grid grid-cols-2 gap-2">
+          <Field label={t('name')}><Input required minLength={2} value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <Field label={t('mobile')}><Input required dir="ltr" inputMode="numeric" placeholder="05XXXXXXXX" value={mobile} onChange={(e) => setMobile(e.target.value)} /></Field>
+        </div>
+        <Field label={t('mapLink')}><Input required type="url" dir="ltr" placeholder="https://maps.google.com/..." value={mapUrl} onChange={(e) => setMapUrl(e.target.value)} /><span className="mt-1 block text-xs text-slate-500">{t('mapLinkHint')}</span></Field>
+        <Field label={t('addressDetails')}><Input value={addr} onChange={(e) => setAddr(e.target.value)} /></Field>
+        <div><div className="mb-1 text-sm text-slate-600 dark:text-slate-300">{t('placePhoto')}</div><ImageUpload value={photo} onChange={setPhoto} /></div>
         {(!me?.BranchId || branches.length > 1) && <Field label={t('branch')}><Select required value={branchId} onChange={(e) => setBranchId(e.target.value)}><option value="" />{branches.map((b) => <option key={b.Id} value={b.Id}>{b.Name}</option>)}</Select></Field>}
         {lines.map((l, i) => (
           <div key={i} className={`grid gap-2 ${canPrice ? 'grid-cols-[1fr_4.5rem_6.5rem]' : 'grid-cols-[1fr_5rem]'}`}>
@@ -351,18 +355,14 @@ function NewBooking({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
           </div>
         ))}
         <button type="button" className="text-sm text-cyan-700" onClick={() => setLines([...lines, { serviceId: '', quantity: '1', price: '' }])}>+ {t('addLine')}</button>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label={t('start')}><Input type="datetime-local" required value={start} onChange={(e) => setStart(e.target.value)} /></Field>
-          <Field label={t('minutes')}><Input type="number" min={15} step={15} required value={minutes} onChange={(e) => setMinutes(e.target.value)} /></Field>
-        </div>
+        <Field label={t('dayAndHour')}><Input type="datetime-local" required value={start} onChange={(e) => setStart(e.target.value)} /></Field>
         {techs.length > 0 && (
           <div><div className="mb-1 text-sm text-slate-600 dark:text-slate-300">{t('pickTechs')}</div>
             <div className="flex flex-wrap gap-3 text-sm">{techs.map((x) => <label key={x.Id} className="flex items-center gap-1"><input type="checkbox" checked={sel.includes(x.Id)} onChange={(e) => setSel(e.target.checked ? [...sel, x.Id] : sel.filter((i) => i !== x.Id))} />{x.FullName}</label>)}</div></div>
         )}
-        {can('bookings.discount') && <Field label={t('discount')}><Input type="number" min={0} step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} /></Field>}
         <div className="text-sm text-slate-500">≈ {money(est, lang)} ({lang === 'ar' ? 'قبل الضريبة' : 'before VAT'})</div>
         {err && <ErrorBox message={err} />}
-        <div className="flex gap-2"><Button type="submit" disabled={busy || !cust}>{t('save')}</Button><Button type="button" variant="ghost" onClick={onClose}>{t('cancel')}</Button></div>
+        <div className="flex gap-2"><Button type="submit" disabled={busy}>{t('save')}</Button><Button type="button" variant="ghost" onClick={onClose}>{t('cancel')}</Button></div>
       </form>
     </Modal>
   );
