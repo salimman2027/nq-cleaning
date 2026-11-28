@@ -2,18 +2,18 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { useI18n } from './i18n';
 
-interface Slot { time: string; end: string; available: boolean }
+export interface Slot { time: string; end: string; available: boolean }
 
 /** Time slots the company offers on the chosen day; full ones are shown but cannot be picked. */
-export function SlotPicker({ slug, date, value, onChange }: { slug: string; date: string; value: string; onChange: (time: string) => void }) {
+export function SlotPicker({ slug, date, value, onChange, serviceIds = [] }: { slug: string; date: string; value: string; onChange: (time: string) => void; serviceIds?: number[] }) {
   const { t } = useI18n();
   const [slots, setSlots] = useState<Slot[] | null>(null);
   useEffect(() => {
     setSlots(null);
     if (!slug || !date) return;
-    api<{ slots: Slot[] }>(`/market/companies/${slug}/slots?date=${date}`).then((r) => { setSlots(r.slots); if (!r.slots.some((s) => s.time === value && s.available)) onChange(''); }).catch(() => setSlots([]));
+    api<{ slots: Slot[] }>(`/market/companies/${slug}/slots?date=${date}${serviceIds.length ? `&services=${serviceIds.join(',')}` : ''}`).then((r) => { setSlots(r.slots); if (!r.slots.some((s) => s.time === value && s.available)) onChange(''); }).catch(() => setSlots([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, date]);
+  }, [slug, date, serviceIds.join(',')]);
   if (!date) return <p className="text-sm text-slate-500">{t('pickDateFirst')}</p>;
   if (!slots) return <p className="text-sm text-slate-500">{t('loading')}</p>;
   if (slots.length === 0) return <p className="text-sm text-amber-600">{t('noSlotsDay')}</p>;

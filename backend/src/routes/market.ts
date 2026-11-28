@@ -78,7 +78,8 @@ marketRouter.get('/companies/:slug/slots', h(async (req, res) => {
   const date = parse(z.string().regex(/^\d{4}-\d{2}-\d{2}$/), req.query.date);
   const c = (await query<{ Id: number }>(`SELECT Id FROM Companies WHERE Slug=@s AND Status='approved' AND IsDeleted=0 AND IsPlatform=0`, { s: slug }))[0];
   if (!c) throw new HttpError(404, 'NOT_FOUND', 'Company not found');
-  res.json(await slotsWithAvailability(c.Id, date));
+  const ids = String(req.query.services ?? '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0);
+  res.json(await slotsWithAvailability(c.Id, date, ids));
 }));
 
 /** A visitor attaches a photo of the place to a request. Images only, 2 MB, rate-limited; stored under the company being asked. */
@@ -122,7 +123,7 @@ marketRouter.post('/companies/:slug/requests', requestLimiter, h(async (req, res
   if (!svc.length) throw new HttpError(400, 'BAD_SERVICE', 'Unknown service');
   const area = await checkArea(c.Id, b.city, b.district);
   if (!b.time && !b.period) throw new HttpError(400, 'VALIDATION_ERROR', 'Choose a time');
-  if (b.time) await assertSlot(c.Id, b.date, b.time);
+  if (b.time) await assertSlot(c.Id, b.date, b.time, [b.serviceId]);
   const r = await query<{ Id: number }>(
     `INSERT INTO BookingRequests (CompanyId, ServiceId, CustomerName, Phone, Address, PreferredDate, PreferredPeriod, Notes, CustomerId, City, District, Latitude, Longitude, PhotoUrl, PreferredTime)
      OUTPUT inserted.Id VALUES (@c,@s,@n,@p,@a,@d,@pe,@no,@cu,@ci,@di,@la,@ln,@ph,@tm)`,

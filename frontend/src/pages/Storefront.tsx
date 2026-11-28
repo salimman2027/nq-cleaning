@@ -56,7 +56,7 @@ function RequestForm({ store, color, picked }: { store: Store; color: string; pi
         <input required dir="ltr" inputMode="numeric" pattern="05[0-9]{8}" className={cls} placeholder={t('yourPhone')} value={f.phone} onChange={set('phone')} />
         <input required type="date" min={today} className={cls} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value, time: '' })} aria-label={t('prefDate')} />
       </div>
-      <SlotPicker slug={store.slug} date={f.date} value={f.time} onChange={(time) => setF((x) => ({ ...x, time }))} />
+      <SlotPicker slug={store.slug} serviceIds={f.serviceId ? [Number(f.serviceId)] : []} date={f.date} value={f.time} onChange={(time) => setF((x) => ({ ...x, time }))} />
       <AreaSelect areas={store.areas} city={f.city} district={f.district} onChange={(city, district) => setF({ ...f, city, district })} className={cls} />
       <textarea rows={2} className={cls} placeholder={t('addressOpt')} value={f.address} onChange={set('address')} />
       <div className="space-y-2">
@@ -210,7 +210,7 @@ export default function Storefront() {
                       </div>
                       <div className="p-3">
                         <h3 className="line-clamp-2 min-h-10 text-sm font-bold leading-snug">{x.Name}</h3>
-                        <div className="text-xs text-slate-500">{x.DefaultMinutes} {t('minutes')}</div>
+                        <div className="text-xs text-slate-500">{Math.round(x.DefaultMinutes / 6) / 10} {t('hoursUnit')}</div>
                         <div className="mt-1 h-6 font-bold" style={{ color }}>{x.FromPrice != null && <><span className="me-1 text-xs font-normal text-slate-500">{t('servicesFrom')}</span>{money(x.FromPrice, lang)}</>}</div>
                         <div className="mt-2 flex gap-2">
                           <button onClick={() => setDetail(x)} className="tile flex-1 rounded-full border px-2 py-2 text-sm font-medium" style={{ color, borderColor: color }}>{t('details')}</button>
@@ -226,7 +226,7 @@ export default function Storefront() {
               <Modal title={detail.Name} onClose={() => setDetail(null)}>
                 {detail.ImageUrl && <img src={detail.ImageUrl} alt="" className="mb-3 h-48 w-full rounded-xl object-cover" />}
                 <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
-                  <span className="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-800">{detail.DefaultMinutes} {t('minutes')}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-800">{Math.round(detail.DefaultMinutes / 6) / 10} {t('hoursUnit')}</span>
                   {detail.FromPrice != null && <span className="font-bold" style={{ color }}>{t('servicesFrom')} {money(detail.FromPrice, lang)}</span>}
                 </div>
                 {detail.Description && <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">{detail.Description}</p>}

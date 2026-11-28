@@ -35,30 +35,48 @@ export async function loadTeams(companyId: number, company?: Schedule): Promise<
 }
 
 /** How many jobs the company can take at a slot: the sum of what each team working then can take; the company number when no teams exist. */
-function capacityAt(s: Schedule, teams: TeamSchedule[], date: string, time: string): number {
+function capacityAt(s: Schedule, teams: TeamSchedule[], date: string, time: string, dur: number): number {
   if (teams.length === 0) return s.maxPerSlot;
   const dow = String(new Date(`${date}T00:00:00Z`).getUTCDay());
   const start = toMin(time);
-  return teams.reduce((n, t) => (t.days.includes(dow) && start >= toMin(t.open) && start + s.slotMinutes <= toMin(t.close) ? n + t.maxPerSlot : n), 0);
+  return teams.reduce((n, t) => (t.days.includes(dow) && start >= toMin(t.open) && start + dur <= toMin(t.close) ? n + t.maxPerSlot : n), 0);
 }
 
-export async function slotsWithAvailability(companyId: number, date: string) {
+/** How long a job takes: the sum of the chosen services' durations (set per service by the company). Falls back to one slot. */
+export async function durationOf(companyId: number, serviceIds: number[] | undefined, fallback: number): Promise<number> {
+  const ids = [...new Set((serviceIds ?? []).filter((x) => Number.isInteger(x) && x > 0))].slice(0, 20);
+  if (ids.length === 0) return fallback;
+  const r = await query<{ M: number | null }>(`SELECT SUM(DefaultMinutes) AS M FROM Services WHERE CompanyId=@c AND Id IN (${ids.join(',')})`, { c: companyId });
+  return Math.max(30, Number(r[0]?.M ?? fallback));
+}
+
+export async function slotsWithAvailability(companyId: number, date: string, serviceIds?: number[]) {
   const s = await loadSchedule(companyId);
   const teams = await loadTeams(companyId, s);
-  const used = await query<{ T: string; N: number }>(`SELECT PreferredTime AS T, COUNT(*) AS N FROM BookingRequests WHERE CompanyId=@c AND PreferredDate=@d AND Status<>'cancelled' AND PreferredTime IS NOT NULL GROUP BY PreferredTime`, { c: companyId, d: date });
-  const n = new Map(used.map((u) => [u.T, Number(u.N)]));
-  // The grid is built from the earliest start to the latest end across the company and its teams, then filtered by who is actually working.
+  const dur = await durationOf(companyId, serviceIds, s.slotMinutes);
+  // Existing requests on that day block the time they really take (their services' durations), not just their start.
+  const used = await query<{ T: string; D: number }>(
+    `SELECT r.PreferredTime AS T,
+            COALESCE((SELECT SUM(sv.DefaultMinutes) FROM BookingRequestItems i JOIN Services sv ON sv.Id=i.ServiceId WHERE i.RequestId=r.Id), (SELECT DefaultMinutes FROM Services WHERE Id=r.ServiceId), @sm) AS D
+       FROM BookingRequests r WHERE r.CompanyId=@c AND r.PreferredDate=@d AND r.Status<>'cancelled' AND r.PreferredTime IS NOT NULL`,
+    { c: companyId, d: date, sm: s.slotMinutes });
+  const busy = used.map((u) => ({ from: toMin(u.T), to: toMin(u.T) + Number(u.D) }));
   const widest: Schedule = { ...s, days: '0123456', open: [s.open, ...teams.map((t) => t.open)].sort()[0], close: [s.close, ...teams.map((t) => t.close)].sort().slice(-1)[0] };
-  const slots = slotTimes(widest, date)
-    .map((x) => ({ ...x, cap: capacityAt(s, teams, date, x.time) }))
-    .filter((x) => x.cap > 0 && (teams.length > 0 || s.days.includes(String(new Date(`${date}T00:00:00Z`).getUTCDay()))))
-    .map((x) => ({ time: x.time, end: x.end, available: (n.get(x.time) ?? 0) < x.cap }));
-  return { schedule: s, slots };
+  const dow = String(new Date(`${date}T00:00:00Z`).getUTCDay());
+  const slots = slotTimes({ ...widest, close: toStr(Math.min(24 * 60 - 1, toMin(widest.close) + Math.max(0, s.slotMinutes - dur))) }, date)
+    .map((x) => ({ ...x, cap: teams.length === 0 ? (toMin(x.time) + dur <= toMin(s.close) && s.days.includes(dow) ? s.maxPerSlot : 0) : capacityAt(s, teams, date, x.time, dur) }))
+    .filter((x) => x.cap > 0)
+    .map((x) => {
+      const start = toMin(x.time);
+      const overlap = busy.filter((b) => b.from < start + dur && b.to > start).length;
+      return { time: x.time, end: toStr(start + dur), available: overlap < x.cap };
+    });
+  return { schedule: s, durationMinutes: dur, slots };
 }
 
 /** Rejects a time that is not one of the company's slots on that day, or a slot that is already full. */
-export async function assertSlot(companyId: number, date: string, time: string): Promise<void> {
-  const { slots } = await slotsWithAvailability(companyId, date);
+export async function assertSlot(companyId: number, date: string, time: string, serviceIds?: number[]): Promise<void> {
+  const { slots } = await slotsWithAvailability(companyId, date, serviceIds);
   const sl = slots.find((x) => x.time === time);
   if (!sl) throw new HttpError(400, 'BAD_SLOT', 'This time is outside the company working hours');
   if (!sl.available) throw new HttpError(409, 'SLOT_FULL', 'This time slot is full');

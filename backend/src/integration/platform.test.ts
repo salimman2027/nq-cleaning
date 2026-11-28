@@ -435,6 +435,15 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     const again = await request(app).get(`/api/market/companies/clean-co/slots?date=${day}`);
     assert.equal(again.body.slots[0].available, false);
     assert.equal(again.body.slots[1].available, true);
+    // A service that needs 4 hours: the team works 09:00–13:00, so only a 09:00 start fits, and it ends at 13:00.
+    const { query: q } = await import('../db');
+    const long = await q<{ Id: number }>(`INSERT INTO Services (CompanyId, Name, PricingMethod, DefaultMinutes, DefaultTechnicians) OUTPUT inserted.Id VALUES (@c, N'خدمة 4 ساعات', 'fixed', 240, 1)`, { c: companyId });
+    const day2 = new Date(Date.parse(day) + 7 * 86400_000).toISOString().slice(0, 10);
+    const dow2 = String(new Date(`${day2}T00:00:00Z`).getUTCDay());
+    assert.equal(dow2, dow, 'same weekday a week later');
+    const four = await request(app).get(`/api/market/companies/clean-co/slots?date=${day2}&services=${long[0].Id}`);
+    assert.equal(four.body.durationMinutes, 240);
+    assert.deepEqual(four.body.slots.map((x: { time: string; end: string }) => `${x.time}-${x.end}`), ['09:00-13:00']);
   });
 
   test('sections can be added and deleted; a section with services cannot', async () => {

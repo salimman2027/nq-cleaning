@@ -80,7 +80,7 @@ export default function Cart() {
           <h2 className="font-semibold">{t('checkout')}</h2>
           {err && <ErrorBox message={err} />}
           <input required type="date" min={today} className={cls} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value, time: '' })} aria-label={t('prefDate')} />
-          <SlotPicker slug={cart.slug} date={f.date} value={f.time} onChange={(time) => setF((x) => ({ ...x, time }))} />
+          <SlotPicker slug={cart.slug} serviceIds={cart.items.map((i) => i.serviceId)} date={f.date} value={f.time} onChange={(time) => setF((x) => ({ ...x, time }))} />
           <AreaSelect areas={areas} city={f.city} district={f.district} onChange={(city, district) => setF({ ...f, city, district })} className={cls} />
           <textarea rows={2} required minLength={3} className={cls} placeholder={t('addressReq')} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
       <div className="space-y-2">

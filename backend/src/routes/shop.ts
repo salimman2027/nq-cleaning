@@ -91,7 +91,7 @@ shopRouter.post('/orders', customerAuth, h(async (req, res) => {
   if (!co) throw new HttpError(404, 'NOT_FOUND', 'Company not found');
   const area = await checkArea(co.Id, b.city, b.district);
   if (!b.time && !b.period) throw new HttpError(400, 'VALIDATION_ERROR', 'Choose a time');
-  if (b.time) await assertSlot(co.Id, b.date, b.time);
+  if (b.time) await assertSlot(co.Id, b.date, b.time, b.items.map((i) => i.serviceId));
   const cu = (await query<{ Name: string; Phone: string }>(`SELECT Name, Phone FROM MarketplaceCustomers WHERE Id=@i AND IsDeleted=0`, { i: req.customerId }))[0];
   if (!cu) throw new HttpError(401, 'INVALID_TOKEN', 'Account not found');
   const lines: { serviceId: number; name: string; price: number; qty: number }[] = [];
@@ -120,9 +120,9 @@ shopRouter.post('/orders', customerAuth, h(async (req, res) => {
 
 shopRouter.get('/orders', customerAuth, h(async (req, res) => {
   const rows = await query<Record<string, any>>(
-    `SELECT r.Id, r.Status, r.PaymentMethod, r.PaymentStatus, r.Total, r.PreferredDate, r.PreferredPeriod, r.PreferredTime, r.Address, r.City, r.District, r.CreatedAt, c.Name AS CompanyName, c.Slug,
+    `SELECT r.Id, r.Status, r.PaymentMethod, r.PaymentStatus, r.Total, r.PreferredDate, r.PreferredPeriod, r.PreferredTime, r.Address, r.City, r.District, r.CreatedAt, c.Name AS CompanyName, c.Slug, bk.Status AS JobStatus,
             CASE WHEN r.Status IN ('contacted','confirmed','cancelled') AND ISNULL(r.CustomerSeenStatus,'new')<>r.Status THEN 1 ELSE 0 END AS Unseen
-       FROM BookingRequests r JOIN Companies c ON c.Id=r.CompanyId WHERE r.CustomerId=@i ORDER BY r.CreatedAt DESC`, { i: req.customerId });
+       FROM BookingRequests r JOIN Companies c ON c.Id=r.CompanyId LEFT JOIN Bookings bk ON bk.Id=r.BookingId WHERE r.CustomerId=@i ORDER BY r.CreatedAt DESC`, { i: req.customerId });
   const items = rows.length ? await query<Record<string, any>>(`SELECT RequestId, Name, UnitPrice, Qty FROM BookingRequestItems WHERE RequestId IN (SELECT Id FROM BookingRequests WHERE CustomerId=@i)`, { i: req.customerId }) : [];
   res.json({ items: rows.map((r) => ({ ...r, Items: items.filter((x) => x.RequestId === r.Id) })) });
 }));
