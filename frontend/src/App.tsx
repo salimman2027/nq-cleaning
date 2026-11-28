@@ -114,7 +114,7 @@ export default function App() {
   if (!ready) return <div className="p-8"><Skeleton rows={3} /></div>;
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
+      <Route path="/" element={import.meta.env.VITE_APP_MODE === 'field' ? <Navigate to="/app/field" replace /> : <Home />} />
       <Route path="/c/:slug" element={<Storefront />} />
       <Route path="/account" element={<Account />} />
       <Route path="/cart" element={<Cart />} />

@@ -1,14 +1,23 @@
 name: Build Android APK
 
+# Builds two installable apps from the same code:
+#   faz3tak.apk            the customer app (browse companies, order, track)
+#   faz3tak-supervisor.apk the field supervisor app (opens straight on "مهامي")
 on:
   workflow_dispatch:
-  
+
 permissions:
   contents: write
 
 jobs:
   apk:
     runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1   # both jobs upload to the same release
+      matrix:
+        include:
+          - { name: customer, file: faz3tak.apk, appId: com.faz3tak.app, appName: "فزعتك", mode: "" }
+          - { name: supervisor, file: faz3tak-supervisor.apk, appId: com.faz3tak.field, appName: "فزعتك مشرف", mode: field }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,17 +31,20 @@ jobs:
       - name: Build web app
         working-directory: frontend
         env:
-          # Public HTTPS URL of the backend, e.g. https://api.example.com/api
-          # Set it in GitHub: Settings > Secrets and variables > Actions > Variables > API_URL
+          # Public HTTPS URL of the backend. Override with the API_URL repository variable.
           VITE_API_URL: ${{ vars.API_URL || 'https://nq-cleaning.premiumasp.net/api' }}
-        run: |
-          if [ -z "$VITE_API_URL" ]; then echo "::warning::API_URL variable is not set; the APK will call /api on its own origin and cannot reach a server."; fi
-          npm run build
+          VITE_APP_MODE: ${{ matrix.mode }}
+        run: npm run build
 
       - name: Add and sync Android project
         working-directory: frontend
+        env:
+          CAP_APP_ID: ${{ matrix.appId }}
+          CAP_APP_NAME: ${{ matrix.appName }}
         run: |
           npx cap add android
+          # camera (photo / video) and location (arrival pin) for the web view
+          sed -i 's#</manifest>#    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n</manifest>#' android/app/src/main/AndroidManifest.xml
           npx cap sync android
 
       - name: Assemble debug APK
@@ -43,6 +55,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk faz3tak.apk
-          gh release view app-latest >/dev/null 2>&1 || gh release create app-latest --title "Faz3tak Android app" --notes "Debug-signed APK for direct install. Enable installing from this source on the phone." --latest=false
-          gh release upload app-latest faz3tak.apk --clobber
+          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk "${{ matrix.file }}"
+          gh release view app-latest >/dev/null 2>&1 || gh release create app-latest --title "Faz3tak Android apps" --notes "Debug-signed APKs for direct install. Enable installing from this source on the phone." --latest=false
+          gh release upload app-latest "${{ matrix.file }}" --clobber
