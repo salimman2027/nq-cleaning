@@ -6,6 +6,7 @@ import { useShop } from '../shop';
 import { Remember } from '../Remember';
 import { Button, ErrorBox, Field, Input, PasswordInput, money, Skeleton } from '../ui';
 import ComplaintForm from './ComplaintForm';
+import TrackOrder from './TrackOrder';
 import { PublicShell } from './Home';
 
 interface Order { Unseen?: number; Id: number; Status: string; PaymentMethod: string; PaymentStatus: string; Total: number | null; PreferredDate: string; PreferredPeriod: string; PreferredTime?: string | null; CompanyName: string; Slug: string; CreatedAt: string; Items: { Name: string; Qty: number; UnitPrice: number }[] }
@@ -19,6 +20,7 @@ export default function Account() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [complain, setComplain] = useState<Order | null>(null);
+  const [track, setTrack] = useState<number | null>(null);
   const [orders, setOrders] = useState<Order[] | null>(null);
   const claim = async () => { try { await api('/shop/orders/claim', { method: 'POST', customer: true }); const r = await api<{ items: Order[] }>('/shop/orders', { customer: true }); setOrders(r.items); } catch { /* ignore */ } };
   useEffect(() => { if (customer) api<{ items: Order[] }>('/shop/orders', { customer: true }).then((r) => { setOrders(r.items); if (r.items.some((o) => o.Unseen)) api('/shop/orders/seen', { method: 'POST', customer: true }).then(refresh).catch(() => undefined); }).catch(() => setErr('Error')); }, [customer]);
@@ -82,10 +84,11 @@ export default function Account() {
               <span>{t('payCash')} · {o.PaymentStatus === 'paid' ? t('paid') : t('unpaid')}</span>
               <b>{o.Total != null ? money(o.Total, lang) : '—'}</b>
             </div>
-            <button onClick={() => setComplain(o)} className="mt-2 text-xs text-slate-500 underline">{t('complain')}</button>
+            <div className="mt-2 flex items-center gap-4"><button onClick={() => setTrack(o.Id)} className="rounded-lg bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white">{t('trackOrder')}</button><button onClick={() => setComplain(o)} className="text-xs text-slate-500 underline">{t('complain')}</button></div>
           </article>
         ))}
       </div>
+      {track !== null && <TrackOrder orderId={track} onClose={() => setTrack(null)} />}
       {complain && <ComplaintForm slug={complain.Slug} orderId={complain.Id} onClose={() => setComplain(null)} />}
     </PublicShell>
   );

@@ -127,14 +127,46 @@ shopRouter.get('/orders', customerAuth, h(async (req, res) => {
   res.json({ items: rows.map((r) => ({ ...r, Items: items.filter((x) => x.RequestId === r.Id) })) });
 }));
 
-/** A signed-in customer complains about one of their own orders. */
+const STAGE_AR: Record<string, string> = { depart: 'التحرك للعميل', arrive: 'الوصول للعميل', start: 'بدء العمل', progress: 'متابعة العمل', finish: 'إنهاء العمل', cash: 'استلام الكاش' };
+
+/** A signed-in customer complains about one of their own orders (optionally about one stage of the job). */
 shopRouter.post('/orders/:id/complaints', customerAuth, h(async (req, res) => {
   const id = parse(z.coerce.number().int().positive(), req.params.id);
-  const b = parse(z.object({ message: z.string().trim().min(10).max(1000) }), req.body);
+  const b = parse(z.object({ message: z.string().trim().min(10).max(950), stage: z.enum(['depart', 'arrive', 'start', 'progress', 'finish', 'cash']).optional() }), req.body);
   const o = (await query<{ CompanyId: number; CustomerName: string; Phone: string }>(`SELECT CompanyId, CustomerName, Phone FROM BookingRequests WHERE Id=@i AND CustomerId=@c`, { i: id, c: req.customerId }))[0];
   if (!o) throw new HttpError(404, 'NOT_FOUND', 'Order not found');
-  const r = await query<{ Id: number }>(`INSERT INTO Complaints (CompanyId, RequestId, CustomerId, CustomerName, Phone, Message) OUTPUT inserted.Id VALUES (@co,@r,@cu,@n,@p,@m)`, { co: o.CompanyId, r: id, cu: req.customerId, n: o.CustomerName, p: o.Phone, m: b.message });
+  const r = await query<{ Id: number }>(`INSERT INTO Complaints (CompanyId, RequestId, CustomerId, CustomerName, Phone, Message, Stage) OUTPUT inserted.Id VALUES (@co,@r,@cu,@n,@p,@m,@st)`, { co: o.CompanyId, r: id, cu: req.customerId, n: o.CustomerName, p: o.Phone, m: b.stage ? `[${STAGE_AR[b.stage]}] ${b.message}` : b.message, st: b.stage ?? null });
   res.status(201).json({ id: r[0].Id });
+}));
+
+/** Order tracking: request and confirmation dates plus what the supervisor recorded at each stage (notes, photos, videos). */
+shopRouter.get('/orders/:id/track', customerAuth, h(async (req, res) => {
+  const id = parse(z.coerce.number().int().positive(), req.params.id);
+  const o = (await query<Record<string, any>>(
+    `SELECT r.Id, r.Status, r.CreatedAt, r.BookingId, b.CreatedAt AS ConfirmedAt, b.Status AS JobStatus, c.Name AS CompanyName, c.Slug
+       FROM BookingRequests r JOIN Companies c ON c.Id=r.CompanyId LEFT JOIN Bookings b ON b.Id=r.BookingId WHERE r.Id=@i AND r.CustomerId=@c`, { i: id, c: req.customerId }))[0];
+  if (!o) throw new HttpError(404, 'NOT_FOUND', 'Order not found');
+  const events = o.BookingId ? await query<Record<string, any>>(
+    `SELECT e.Id, e.Stage, e.Note, e.Amount, e.CreatedAt, (SELECT f.Id, f.Kind FROM BookingStageFiles f WHERE f.EventId=e.Id FOR JSON PATH) AS FilesJson
+       FROM BookingStageEvents e WHERE e.BookingId=@b AND e.Stage<>'next' ORDER BY e.Id`, { b: o.BookingId }) : [];
+  res.json({
+    requestId: o.Id, status: o.Status, company: o.CompanyName, slug: o.Slug, requestedAt: o.CreatedAt, confirmedAt: o.ConfirmedAt ?? null,
+    events: events.map((e) => ({ id: e.Id, stage: e.Stage, note: e.Note, amount: e.Amount, at: e.CreatedAt, files: e.FilesJson ? JSON.parse(e.FilesJson) : [] })),
+  });
+}));
+
+shopRouter.get('/orders/:id/track/files/:fid', customerAuth, h(async (req, res) => {
+  const id = parse(z.coerce.number().int().positive(), req.params.id);
+  const fid = parse(z.coerce.number().int().positive(), req.params.fid);
+  const f = (await query<Record<string, any>>(
+    `SELECT f.MimeType, f.Data FROM BookingStageFiles f JOIN BookingRequests r ON r.BookingId=f.BookingId JOIN BookingStageEvents e ON e.Id=f.EventId
+      WHERE f.Id=@f AND r.Id=@i AND r.CustomerId=@c AND e.Stage<>'next'`, { f: fid, i: id, c: req.customerId }))[0];
+  if (!f) throw new HttpError(404, 'NOT_FOUND', 'File not found');
+  res.setHeader('Content-Type', f.MimeType);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.send(f.Data);
 }));
 
 /** Attach earlier visitor requests made with this mobile number (before the account existed). The number is not verified, so the customer asks for it explicitly. */

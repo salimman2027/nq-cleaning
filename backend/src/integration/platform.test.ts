@@ -198,6 +198,11 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     const list = await request(app).get('/api/shop/orders').set(auth(tok));
     assert.equal(list.body.items.length, 1);
     assert.equal(list.body.items[0].Unseen, 1);
+    const tr = await request(app).get(`/api/shop/orders/${ok.body.id}/track`).set(auth(tok));
+    assert.equal(tr.status, 200);
+    assert.ok(tr.body.requestedAt && Array.isArray(tr.body.events));
+    assert.equal((await request(app).get(`/api/shop/orders/${ok.body.id}/track`)).status, 401);
+    assert.equal((await request(app).post(`/api/shop/orders/${ok.body.id}/complaints`).set(auth(tok)).send({ message: 'Late arrival at the site.', stage: 'arrive' })).status, 201);
     assert.equal((await request(app).post('/api/shop/orders/seen').set(auth(tok))).status, 200);
     assert.equal((await request(app).get('/api/shop/me').set(auth(tok))).body.unseen, 0);
     const co = await request(app).post(`/api/shop/orders/${ok.body.id}/complaints`).set(auth(tok)).send({ message: 'The team did not show up on time.' });

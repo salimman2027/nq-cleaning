@@ -4,7 +4,7 @@ import { useI18n } from '../i18n';
 import { Button, ErrorBox, Field, Input, Modal } from '../ui';
 
 /** Complaint dialog. With `orderId` it goes through the signed-in customer's own order; otherwise it is a public form. */
-export default function ComplaintForm({ slug, orderId, onClose }: { slug: string; orderId?: number; onClose: () => void }) {
+export default function ComplaintForm({ slug, orderId, stage, onClose }: { slug: string; orderId?: number; stage?: string; onClose: () => void }) {
   const { t } = useI18n();
   const [f, setF] = useState({ customerName: '', phone: '', message: '' });
   const [err, setErr] = useState('');
@@ -13,7 +13,7 @@ export default function ComplaintForm({ slug, orderId, onClose }: { slug: string
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setErr('');
     try {
-      if (orderId) await api(`/shop/orders/${orderId}/complaints`, { method: 'POST', customer: true, body: { message: f.message } });
+      if (orderId) await api(`/shop/orders/${orderId}/complaints`, { method: 'POST', customer: true, body: { message: f.message, stage } });
       else await api(`/market/companies/${slug}/complaints`, { method: 'POST', body: f });
       setDone(true);
     } catch (ex) { setErr(ex instanceof ApiError ? t('err_VALIDATION_ERROR') : 'Error'); } finally { setBusy(false); }

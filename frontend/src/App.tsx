@@ -119,6 +119,7 @@ export default function App() {
       <Route path="/account" element={<Account />} />
       <Route path="/cart" element={<Cart />} />
       <Route path="/rate/:token" element={<Rate />} />
+      <Route path="/field" element={<Navigate to="/app/field" replace />} />
       <Route path="/join" element={me ? <Navigate to="/app" replace /> : <Register />} />
       <Route path="/login" element={me ? <Navigate to="/app" replace /> : <Login />} />
       <Route path="/app" element={<Layout />}>

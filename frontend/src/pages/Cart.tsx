@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError, fileToBase64 } from '../api';
+import { shrink } from '../image';
 import { useI18n, type Key } from '../i18n';
 import { useShop } from '../shop';
 import { Button, ErrorBox, money } from '../ui';
@@ -24,8 +25,9 @@ export default function Cart() {
   const [err, setErr] = useState('');
   const [photoBusy, setPhotoBusy] = useState(false);
   const locate = () => { if (!navigator.geolocation) return; navigator.geolocation.getCurrentPosition((p) => setF((x) => ({ ...x, lat: p.coords.latitude, lng: p.coords.longitude })), () => setErr(t('locationFail')), { enableHighAccuracy: true, timeout: 15000 }); };
-  const pickPhoto = async (file?: File) => {
-    if (!file) return;
+  const pickPhoto = async (picked?: File) => {
+    if (!picked) return;
+    const file = await shrink(picked);
     if (file.size > 2 * 1024 * 1024) { setErr(t('imgTooBig')); return; }
     setPhotoBusy(true);
     try { const r = await api<{ url: string }>(`/market/companies/${cart?.slug}/photo`, { method: 'POST', body: { dataBase64: await fileToBase64(file) } }); setF((x) => ({ ...x, photo: r.url })); } catch { setErr(t('imgFail')); } finally { setPhotoBusy(false); }
@@ -85,7 +87,8 @@ export default function Cart() {
         <button type="button" onClick={locate} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-medium dark:border-slate-600">📍 {f.lat ? t('locationSet') : t('shareLocation')}</button>
         <div className="flex items-center gap-3">
           {f.photo && <img src={f.photo} alt="" className="h-14 w-20 rounded-lg object-cover" />}
-          <label className="cursor-pointer rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-medium dark:border-slate-600">{photoBusy ? t('loading') : f.photo ? t('replaceFile') : `📷 ${t('housePhoto')}`}<input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp" onChange={(e) => { void pickPhoto(e.target.files?.[0]); e.target.value = ''; }} /></label>
+          <label className="cursor-pointer rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-medium dark:border-slate-600">{photoBusy ? t('loading') : `📷 ${t('takePhoto')}`}<input type="file" className="sr-only" accept="image/*" capture="environment" onChange={(e) => { void pickPhoto(e.target.files?.[0]); e.target.value = ''; }} /></label>
+          <label className="cursor-pointer rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-medium dark:border-slate-600">🖼️ {t('pickFromDevice')}<input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp" onChange={(e) => { void pickPhoto(e.target.files?.[0]); e.target.value = ''; }} /></label>
         </div>
       </div>
           <input className={cls} placeholder={t('notesOpt')} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
