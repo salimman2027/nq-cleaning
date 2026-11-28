@@ -259,7 +259,7 @@ function NewBooking({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   const [addresses, setAddresses] = useState<{ Id: number; City: string | null; District: string | null; Street: string | null }[]>([]);
   const [addressId, setAddressId] = useState('');
   const [services, setServices] = useState<Svc[]>([]);
-  const [lines, setLines] = useState<{ serviceId: string; quantity: string }[]>([{ serviceId: '', quantity: '1' }]);
+  const [lines, setLines] = useState<{ serviceId: string; quantity: string; price: string }[]>([{ serviceId: '', quantity: '1', price: '' }]);
   const [branches, setBranches] = useState<{ Id: number; Name: string }[]>([]);
   const [branchId, setBranchId] = useState(me?.BranchId ? String(me.BranchId) : '');
   const [start, setStart] = useState('');
@@ -298,7 +298,8 @@ function NewBooking({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   }, [start, minutes]);
 
   const onService = (i: number, serviceId: string) => {
-    const next = lines.map((l, j) => (j === i ? { ...l, serviceId } : l));
+    const cat = services.find((x) => String(x.Id) === serviceId)?.CurrentPrice;
+    const next = lines.map((l, j) => (j === i ? { ...l, serviceId, price: cat != null ? String(cat) : '' } : l));
     setLines(next);
     const total = next.reduce((s, l) => s + (services.find((x) => String(x.Id) === l.serviceId)?.DefaultMinutes ?? 0), 0);
     if (total) setMinutes(String(total));
@@ -314,7 +315,11 @@ function NewBooking({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
         body: {
           customerId: cust.Id, addressId: Number(addressId), branchId: branchId ? Number(branchId) : undefined,
           startAt: new Date(start).toISOString(), endAt: endIso,
-          lines: lines.filter((l) => l.serviceId).map((l) => ({ serviceId: Number(l.serviceId), quantity: Number(l.quantity) })),
+          lines: lines.filter((l) => l.serviceId).map((l) => {
+            const cat = services.find((x) => String(x.Id) === l.serviceId)?.CurrentPrice;
+            const custom = l.price !== '' && Number(l.price) !== cat;
+            return { serviceId: Number(l.serviceId), quantity: Number(l.quantity), ...(custom ? { unitPrice: Number(l.price) } : {}) };
+          }),
           technicianIds: sel, discount: Number(discount) || 0, source: 'phone', idempotencyKey: key.current,
         },
       });
@@ -322,7 +327,8 @@ function NewBooking({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
     } catch (ex) { setErr(ex instanceof ApiError ? ex.message : 'Error'); } finally { setBusy(false); }
   };
 
-  const est = lines.reduce((s, l) => s + (services.find((x) => String(x.Id) === l.serviceId)?.CurrentPrice ?? 0) * Number(l.quantity || 0), 0);
+  const est = lines.reduce((s, l) => s + (l.price !== '' ? Number(l.price) : (services.find((x) => String(x.Id) === l.serviceId)?.CurrentPrice ?? 0)) * Number(l.quantity || 0), 0);
+  const canPrice = can('bookings.edit_price');
 
   return (
     <Modal title={t('newBooking')} onClose={onClose}>
@@ -338,12 +344,13 @@ function NewBooking({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
         {cust && <Field label={t('address')}><Select required value={addressId} onChange={(e) => setAddressId(e.target.value)}>{addresses.map((a) => <option key={a.Id} value={a.Id}>{[a.City, a.District, a.Street].filter(Boolean).join(' - ') || `#${a.Id}`}</option>)}</Select></Field>}
         {(!me?.BranchId || branches.length > 1) && <Field label={t('branch')}><Select required value={branchId} onChange={(e) => setBranchId(e.target.value)}><option value="" />{branches.map((b) => <option key={b.Id} value={b.Id}>{b.Name}</option>)}</Select></Field>}
         {lines.map((l, i) => (
-          <div key={i} className="grid grid-cols-[1fr_5rem] gap-2">
+          <div key={i} className={`grid gap-2 ${canPrice ? 'grid-cols-[1fr_4.5rem_6.5rem]' : 'grid-cols-[1fr_5rem]'}`}>
             <Select required={i === 0} value={l.serviceId} onChange={(e) => onService(i, e.target.value)}><option value="" />{services.map((s) => <option key={s.Id} value={s.Id}>{s.Name}{s.CurrentPrice !== null ? ` — ${money(s.CurrentPrice, lang)}` : ''}</option>)}</Select>
             <Input type="number" min={0.5} step="0.5" value={l.quantity} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))} aria-label={t('quantity')} />
+            {canPrice && <Input type="number" min={0} step="0.01" dir="ltr" value={l.price} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))} aria-label={t('unitPrice')} placeholder={t('unitPrice')} />}
           </div>
         ))}
-        <button type="button" className="text-sm text-cyan-700" onClick={() => setLines([...lines, { serviceId: '', quantity: '1' }])}>+ {t('addLine')}</button>
+        <button type="button" className="text-sm text-cyan-700" onClick={() => setLines([...lines, { serviceId: '', quantity: '1', price: '' }])}>+ {t('addLine')}</button>
         <div className="grid grid-cols-2 gap-2">
           <Field label={t('start')}><Input type="datetime-local" required value={start} onChange={(e) => setStart(e.target.value)} /></Field>
           <Field label={t('minutes')}><Input type="number" min={15} step={15} required value={minutes} onChange={(e) => setMinutes(e.target.value)} /></Field>
