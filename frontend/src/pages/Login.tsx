@@ -6,6 +6,7 @@ import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
 import { Button, ErrorBox, Field, Input, PasswordInput } from '../ui';
 import { Remember } from '../Remember';
+import { RobotFace } from '../RobotFace';
 
 export default function Login() {
   const { login } = useAuth();
@@ -51,11 +52,12 @@ export default function Login() {
     <div className="grid min-h-full lg:grid-cols-2 dark:bg-slate-950 dark:text-slate-100">
       <aside className="lattice hidden flex-col justify-between bg-cyan-900 p-10 text-white lg:flex">
         <Link to="/" className="flex items-center gap-2.5 text-lg font-bold"><LogoMark className="h-9 w-9" />{t('app')}</Link>
-        <div><p className="max-w-sm text-3xl font-bold leading-snug">{t('marketTitle')}</p><p className="mt-3 max-w-sm text-white/70">{t('marketSub')}</p></div>
+        <div><RobotFace alert={!!error} shakeKey={error} className="mb-6 h-44 w-44" /><p className="max-w-sm text-3xl font-bold leading-snug">{t('marketTitle')}</p><p className="mt-3 max-w-sm text-white/70">{t('marketSub')}</p></div>
         <Link to="/join" className="text-sm text-white/80 hover:text-white">{t('joinAsCompany')}</Link>
       </aside>
       <div className="flex items-center justify-center bg-[#f4f6fa] p-6 dark:bg-slate-950">
         <form onSubmit={submit} className="w-full max-w-sm space-y-4">
+        <RobotFace alert={!!error} shakeKey={error} className="mx-auto h-24 w-24 lg:hidden" />
         <h1 className="text-2xl font-bold">{t('login')}</h1>
         {mode === 'email' ? (
           <>

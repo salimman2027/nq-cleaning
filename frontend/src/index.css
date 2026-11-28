@@ -70,3 +70,7 @@ h1, h2, h3 { text-wrap: balance; }
   main thead th { background: #0a2552 !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   main tbody tr:nth-child(even) > td { background: #f3f6fb !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+@keyframes robot-shake { 0%, 100% { transform: translateX(0) rotate(0); } 20% { transform: translateX(-6px) rotate(-3deg); } 40% { transform: translateX(6px) rotate(3deg); } 60% { transform: translateX(-4px) rotate(-2deg); } 80% { transform: translateX(4px) rotate(2deg); } }
+.robot-shake { animation: robot-shake .5s ease-in-out 1; }
+@media (prefers-reduced-motion: reduce) { .robot-shake { animation: none; } }
