@@ -60,7 +60,7 @@ marketRouter.get('/companies/:slug', h(async (req, res) => {
     { c: c.Id },
   );
   const sectors = await query(`SELECT s.Code, s.NameAr, s.NameEn FROM CompanySectors cs JOIN Sectors s ON s.Id=cs.SectorId WHERE cs.CompanyId=@c`, { c: c.Id });
-  const categories = await query(`SELECT Name, ImageUrl FROM ServiceCategories WHERE CompanyId=@c AND ImageUrl IS NOT NULL ORDER BY SortOrder, Id`, { c: c.Id });
+  const categories = await query(`SELECT c.Name, c.ImageUrl, s.Name AS Sector FROM ServiceCategories c LEFT JOIN ServiceSectors s ON s.Id=c.SectorId WHERE c.CompanyId=@c ORDER BY ISNULL(s.SortOrder,9999), s.Id, c.SortOrder, c.Id`, { c: c.Id });
   const areas = await loadAreas(c.Id);
   const rate = (await query<{ AvgRating: number | null; RatingsCount: number }>(`SELECT ROUND(AVG(CAST(Stars AS FLOAT)),1) AS AvgRating, COUNT(*) AS RatingsCount FROM Ratings WHERE CompanyId=@c AND Stars IS NOT NULL`, { c: c.Id }))[0];
   res.json({ rating: { average: rate.AvgRating, count: Number(rate.RatingsCount) }, areas, categories, slug: c.Slug, name: c.Name, description: c.Description, logoUrl: c.LogoUrl, coverUrl: c.CoverUrl, whatsapp: c.WhatsApp ? '966' + String(c.WhatsApp).slice(1) : null, primaryColor: c.PrimaryColor, sectors, services });

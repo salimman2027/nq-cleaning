@@ -4,6 +4,7 @@ import { dt, money, query, withTx } from '../db';
 import { HttpError, h, parse } from '../errors';
 import { requirePerm } from '../auth/middleware';
 import { imageRef } from '../lib/company';
+import { STARTER } from '../services/starter';
 
 export const servicesRouter = Router();
 
@@ -29,7 +30,7 @@ servicesRouter.get(
   requirePerm('services.view'),
   h(async (req, res) => {
     const items = await query(
-      `SELECT n.Name, c.ImageUrl, (SELECT COUNT(*) FROM Services s WHERE s.CompanyId=@c AND s.IsDeleted=0 AND s.Category=n.Name) AS Services
+      `SELECT n.Name, c.ImageUrl, c.SectorId, (SELECT COUNT(*) FROM Services s WHERE s.CompanyId=@c AND s.IsDeleted=0 AND s.Category=n.Name) AS Services
          FROM (SELECT Category AS Name FROM Services WHERE CompanyId=@c AND IsDeleted=0 AND Category IS NOT NULL
                UNION SELECT Name FROM ServiceCategories WHERE CompanyId=@c) n
          LEFT JOIN ServiceCategories c ON c.CompanyId=@c AND c.Name=n.Name
@@ -39,6 +40,75 @@ servicesRouter.get(
     res.json({ items });
   }),
 );
+
+/** ---- Sectors: groups of sections ---- */
+servicesRouter.get('/sectors', requirePerm('services.view'), h(async (req, res) => {
+  const items = await query(`SELECT Id, Name, SortOrder FROM ServiceSectors WHERE CompanyId=@c ORDER BY SortOrder, Id`, { c: req.user!.companyId });
+  res.json({ items, starter: STARTER });
+}));
+
+servicesRouter.post('/sectors', requirePerm('services.manage'), h(async (req, res) => {
+  const b = parse(z.object({ name: z.string().trim().min(2).max(80) }), req.body);
+  const c = req.user!.companyId;
+  if ((await query(`SELECT 1 AS x FROM ServiceSectors WHERE CompanyId=@c AND Name=@n`, { c, n: b.name })).length) throw new HttpError(409, 'SECTOR_EXISTS', 'A sector with this name already exists');
+  const r = await query<{ Id: number }>(`INSERT INTO ServiceSectors (CompanyId, Name, SortOrder) OUTPUT INSERTED.Id SELECT @c, @n, ISNULL(MAX(SortOrder),0)+1 FROM ServiceSectors WHERE CompanyId=@c`, { c, n: b.name });
+  res.status(201).json({ id: Number(r[0].Id) });
+}));
+
+servicesRouter.patch('/sectors/:id', requirePerm('services.manage'), h(async (req, res) => {
+  const id = parse(z.coerce.number().int().positive(), req.params.id);
+  const b = parse(z.object({ name: z.string().trim().min(2).max(80) }), req.body);
+  const c = req.user!.companyId;
+  if ((await query(`SELECT 1 AS x FROM ServiceSectors WHERE CompanyId=@c AND Name=@n AND Id<>@i`, { c, n: b.name, i: id })).length) throw new HttpError(409, 'SECTOR_EXISTS', 'A sector with this name already exists');
+  const r = await query(`UPDATE ServiceSectors SET Name=@n OUTPUT INSERTED.Id WHERE Id=@i AND CompanyId=@c`, { c, n: b.name, i: id });
+  if (!r.length) throw new HttpError(404, 'NOT_FOUND', 'Sector not found');
+  res.json({ ok: true });
+}));
+
+/** Deleting a sector keeps its sections and services; the sections just become ungrouped. */
+servicesRouter.delete('/sectors/:id', requirePerm('services.manage'), h(async (req, res) => {
+  const id = parse(z.coerce.number().int().positive(), req.params.id);
+  const c = req.user!.companyId;
+  await withTx(async (tx) => {
+    await query(`UPDATE ServiceCategories SET SectorId=NULL WHERE CompanyId=@c AND SectorId=@i`, { c, i: id }, tx);
+    await query(`DELETE FROM ServiceSectors WHERE CompanyId=@c AND Id=@i`, { c, i: id }, tx);
+  });
+  res.json({ ok: true });
+}));
+
+/** Put a section into a sector (or out of it with sectorId = null). */
+servicesRouter.put('/categories/sector', requirePerm('services.manage'), h(async (req, res) => {
+  const b = parse(z.object({ name: z.string().trim().min(1).max(80), sectorId: z.number().int().positive().nullable() }), req.body);
+  const c = req.user!.companyId;
+  if (b.sectorId != null && !(await query(`SELECT 1 AS x FROM ServiceSectors WHERE Id=@i AND CompanyId=@c`, { i: b.sectorId, c })).length) throw new HttpError(404, 'NOT_FOUND', 'Sector not found');
+  await query(
+    `MERGE ServiceCategories AS t USING (SELECT @c AS CompanyId, @n AS Name) AS s ON t.CompanyId=s.CompanyId AND t.Name=s.Name
+     WHEN MATCHED THEN UPDATE SET SectorId=@s WHEN NOT MATCHED THEN INSERT (CompanyId, Name, SectorId) VALUES (@c,@n,@s);`,
+    { c, n: b.name, s: b.sectorId },
+  );
+  res.json({ ok: true });
+}));
+
+/** Creates the suggested sectors and sections (names only, no services or prices). Existing names are kept and only grouped. */
+servicesRouter.post('/sectors/starter', requirePerm('services.manage'), h(async (req, res) => {
+  const c = req.user!.companyId;
+  await withTx(async (tx) => {
+    let order = 0;
+    for (const sec of STARTER) {
+      order++;
+      let row = (await query<{ Id: number }>(`SELECT Id FROM ServiceSectors WHERE CompanyId=@c AND Name=@n`, { c, n: sec.ar }, tx))[0];
+      if (!row) row = (await query<{ Id: number }>(`INSERT INTO ServiceSectors (CompanyId, Name, SortOrder) OUTPUT INSERTED.Id VALUES (@c,@n,@o)`, { c, n: sec.ar, o: order }, tx))[0];
+      for (const cat of sec.sections) {
+        await query(
+          `MERGE ServiceCategories AS t USING (SELECT @c AS CompanyId, @n AS Name) AS s ON t.CompanyId=s.CompanyId AND t.Name=s.Name
+           WHEN MATCHED AND t.SectorId IS NULL THEN UPDATE SET SectorId=@s WHEN NOT MATCHED THEN INSERT (CompanyId, Name, SectorId) VALUES (@c,@n,@s);`,
+          { c, n: cat.ar, s: Number(row.Id) }, tx,
+        );
+      }
+    }
+  });
+  res.json({ ok: true });
+}));
 
 servicesRouter.put(
   '/categories',

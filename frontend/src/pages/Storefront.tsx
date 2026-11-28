@@ -13,7 +13,7 @@ import { PublicShell } from './Home';
 
 interface Store {
   areas?: ServiceArea[];
-  slug: string; name: string; description: string | null; logoUrl: string | null; coverUrl?: string | null; whatsapp?: string | null; categories?: { Name: string; ImageUrl: string }[]; primaryColor: string | null;
+  slug: string; name: string; description: string | null; logoUrl: string | null; coverUrl?: string | null; whatsapp?: string | null; categories?: { Name: string; ImageUrl: string | null; Sector?: string | null }[]; primaryColor: string | null;
   sectors: { Code: string; NameAr: string; NameEn: string }[];
   services: { Id: number; Name: string; DefaultMinutes: number; FromPrice: number | null; ImageUrl: string | null; Category: string | null; Description: string | null; Includes: string | null; Notes: string | null }[];
 }
@@ -111,7 +111,14 @@ export default function Storefront() {
   const groups = (() => {
     const m = new Map<string, Store['services']>();
     for (const x of s?.services ?? []) { const k = x.Category || t('otherServices'); m.set(k, [...(m.get(k) ?? []), x]); }
-    return [...m.entries()];
+    const rank = (k: string) => { const i = (s?.categories ?? []).findIndex((c) => c.Name === k); return i < 0 ? 9999 : i; };
+    return [...m.entries()].sort((a, b) => rank(a[0]) - rank(b[0]));
+  })();
+  const sectorOf = (cat: string) => s?.categories?.find((c) => c.Name === cat)?.Sector ?? null;
+  const sectorBlocks = (() => {
+    const out: { name: string | null; items: [string, Store['services']][] }[] = [];
+    for (const g of groups) { const n = sectorOf(g[0]); const last = out[out.length - 1]; if (last && last.name === n) last.items.push(g); else out.push({ name: n, items: [g] }); }
+    return out;
   })();
   return (
     <PublicShell>
@@ -167,8 +174,13 @@ export default function Storefront() {
               <section className="mb-10">
                 <h2 className="mb-1 text-2xl font-bold">{t('oneBrandTitle')}</h2>
                 <p className="mb-4 text-sm text-slate-500">{t('oneBrandSub')}</p>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                  {groups.map(([cat, list], i) => {
+                <div className="space-y-6">
+                  {sectorBlocks.map((sb) => (
+                    <div key={sb.name ?? 'none'}>
+                      {sb.name && <h3 className="mb-2 text-lg font-bold">{sb.name}</h3>}
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                  {sb.items.map(([cat, list]) => {
+                    const i = groups.findIndex((g) => g[0] === cat);
                     const img = s.categories?.find((c) => c.Name === cat)?.ImageUrl ?? list.find((x) => x.ImageUrl)?.ImageUrl;
                     const from = Math.min(...list.map((x) => x.FromPrice ?? Infinity));
                     return (
@@ -181,6 +193,9 @@ export default function Storefront() {
                       </button>
                     );
                   })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </section>
             )}

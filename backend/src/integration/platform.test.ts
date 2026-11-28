@@ -454,6 +454,27 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).patch('/api/services/categories').set(auth(ownerToken)).send({ from: 'قسم معدّل', to: 'قسم معدّل' })).status, 200);
   });
 
+  test('sectors group sections; the starter set adds sections without services', async () => {
+    const o = auth(ownerToken);
+    const mk = await request(app).post('/api/services/sectors').set(o).send({ name: 'قطاع تجريبي' });
+    assert.equal(mk.status, 201);
+    assert.equal((await request(app).post('/api/services/sectors').set(o).send({ name: 'قطاع تجريبي' })).status, 409);
+    assert.equal((await request(app).put('/api/services/categories/sector').set(o).send({ name: 'قسم تجريبي', sectorId: mk.body.id })).status, 200);
+    const cats = await request(app).get('/api/services/categories').set(o);
+    assert.equal(cats.body.items.find((c: { Name: string }) => c.Name === 'قسم تجريبي').SectorId, mk.body.id);
+    assert.equal((await request(app).patch(`/api/services/sectors/${mk.body.id}`).set(o).send({ name: 'قطاع معدّل' })).status, 200);
+    assert.equal((await request(app).delete(`/api/services/sectors/${mk.body.id}`).set(o)).status, 200);
+    const after = await request(app).get('/api/services/categories').set(o);
+    assert.equal(after.body.items.find((c: { Name: string }) => c.Name === 'قسم تجريبي').SectorId, null, 'section survives, ungrouped');
+    assert.equal((await request(app).post('/api/services/sectors/starter').set(o)).status, 200);
+    assert.equal((await request(app).post('/api/services/sectors/starter').set(o)).status, 200, 'idempotent');
+    const sec = await request(app).get('/api/services/sectors').set(o);
+    assert.ok(sec.body.items.some((x: { Name: string }) => x.Name === 'قطاع الأفراد'));
+    assert.equal(sec.body.items.filter((x: { Name: string }) => x.Name === 'قطاع الأفراد').length, 1);
+    const c2 = await request(app).get('/api/services/categories').set(o);
+    assert.ok(c2.body.items.some((c: { Name: string }) => c.Name === 'الصيانة'));
+  });
+
   test('demo seed creates marketplace data and purge removes exactly it', async () => {
     const { seedDemo, purgeDemo } = await import('../scripts/seed-demo');
     const { query } = await import('../db');
