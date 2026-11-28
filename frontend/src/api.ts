@@ -72,6 +72,8 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
   if (res.status === 401 && retry && t && (await refresh())) return api<T>(path, opts, false);
   if (res.status === 401 && ct) window.dispatchEvent(new Event('nq:customer-logout'));
   if (res.status === 401 && t) window.dispatchEvent(new Event('nq:logout'));
+  // The sign-in is gone (for example it ended in another tab): send the person back to the login page instead of showing "Missing access token".
+  if (res.status === 401 && !t && !ct && !opts.customer && !path.startsWith('/auth/')) window.dispatchEvent(new Event('nq:logout'));
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
