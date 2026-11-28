@@ -225,6 +225,16 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).post(`/api/bookings/${bk.Id}/supervisor`).set(auth(ownerToken)).send({ supervisorId: sup2.body.id })).status, 200, 'supervisor can be changed freely');
     assert.equal((await request(app).post(`/api/bookings/${bk.Id}/assign`).set(auth(ownerToken)).send({ technicianIds: [tech.body.id], supervisorId: sup.body.id })).status, 200);
     assert.equal((await request(app).get(`/api/bookings/${bk.Id}`).set(auth(ownerToken))).body.SupervisorId, sup.body.id);
+    assert.equal((await request(app).put(`/api/bookings/${bk.Id}/team-notes`).set(auth(ownerToken)).send({ notes: 'علي، محمد' })).status, 200);
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const up = await request(app).post(`/api/bookings/${bk.Id}/team-files`).set(auth(ownerToken)).send({ fileName: 'iqama.png', dataBase64: png });
+    assert.equal(up.status, 201);
+    assert.equal((await request(app).post(`/api/bookings/${bk.Id}/team-files`).set(auth(ownerToken)).send({ fileName: 'x.txt', dataBase64: Buffer.from('hello world').toString('base64') })).status, 415);
+    const det = (await request(app).get(`/api/bookings/${bk.Id}`).set(auth(ownerToken))).body;
+    assert.equal(det.TeamNotes, 'علي، محمد');
+    assert.equal(det.teamFiles.length, 1);
+    assert.equal((await request(app).get(`/api/bookings/${bk.Id}/team-files/${up.body.id}`)).status, 401, 'residence IDs are never public');
+    assert.equal((await request(app).get(`/api/bookings/${bk.Id}/team-files/${up.body.id}`).set(auth(ownerToken))).status, 200);
     const month = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 7);
     const today = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
     assert.equal((await request(app).post('/api/finance/expenses').set(auth(ownerToken)).send({ date: today, category: 'Fuel', amount: 150.5 })).status, 201);

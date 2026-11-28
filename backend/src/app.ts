@@ -46,6 +46,7 @@ export function createApp(): express.Express {
   );
   // Document uploads travel as base64 JSON (5 MB file ≈ 6.7 MB), so this one route gets a larger limit.
   app.use('/api/company/documents', express.json({ limit: '8mb' }));
+  app.use('/api/bookings', express.json({ limit: '4mb' }));
   app.use('/api/media', express.json({ limit: '4mb' }));
   app.use('/api/market/companies', express.json({ limit: '4mb' }));
   app.use(express.json({ limit: '1mb' }));

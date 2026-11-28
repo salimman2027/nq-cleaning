@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, ApiError } from '../api';
+import { api, ApiError, fileToBase64, openFile } from '../api';
 import { useAuth } from '../auth';
 import { STATUS_LABEL, useI18n } from '../i18n';
 import { Button, dateTime, ErrorBox, Field, Input, Modal, money, Select, Skeleton } from '../ui';
@@ -8,6 +8,7 @@ import { Button, dateTime, ErrorBox, Field, Input, Modal, money, Select, Skeleto
 interface Row { Id: number; BookingNo: string; Status: string; StartAt: string; EndAt: string; Total: number; Paid: number; CustomerName: string; CustomerMobile: string; TechnicianCount: number }
 interface Detail extends Row {
   SupervisorId: number | null;
+  TeamNotes?: string | null; teamFiles?: { Id: number; FileName: string }[];
   Notes: string | null; City: string | null; District: string | null; Street: string | null; MapUrl: string | null;
   lines: { Id: number; ServiceName: string; Quantity: number; UnitPrice: number; LineTotal: number }[];
   assignments: { Id: number; TechnicianId: number; FullName: string; IsActive: boolean }[];
@@ -115,6 +116,7 @@ function BookingDetail({ id, onClose, onChanged }: { id: number; onClose: () => 
           </div>
           {can('bookings.assign') && !['closed', 'cancelled'].includes(d.Status) && !['new', 'confirmed', 'awaiting_assignment', 'assigned', 'redo'].includes(d.Status) && <SupervisorPicker booking={d} onDone={() => { load(); onChanged(); }} onError={setErr} />}
           {can('bookings.assign') && ['new', 'confirmed', 'awaiting_assignment', 'assigned', 'redo'].includes(d.Status) && <AssignPanel booking={d} onDone={() => { load(); onChanged(); }} onError={setErr} />}
+          {can('bookings.assign') && !['closed', 'cancelled'].includes(d.Status) && <TeamPanel booking={d} onDone={() => { load(); }} onError={setErr} />}
           {can('bookings.status') && NEXT[d.Status]?.length > 0 && (
             <div className="flex flex-wrap gap-2">{NEXT[d.Status].map((s) => <Button key={s} variant={s === 'cancelled' ? 'danger' : 'ghost'} onClick={() => change(s)}>{label(s)}</Button>)}</div>
           )}
@@ -133,7 +135,7 @@ function AssignPanel({ booking, onDone, onError }: { booking: Detail; onDone: ()
   const [techs, setTechs] = useState<{ Id: number; FullName: string; SupervisorId?: number | null }[]>([]);
   const [sups, setSups] = useState<{ Id: number; FullName: string }[]>([]);
   const [supId, setSupId] = useState<string>(booking.SupervisorId ? String(booking.SupervisorId) : '');
-  const [sel, setSel] = useState<number[]>([]);
+  const [count, setCount] = useState(Math.max(1, booking.assignments.filter((a) => a.IsActive).length));
   useEffect(() => { api<{ items: { Id: number; FullName: string }[] }>('/supervisors').then((r) => setSups(r.items)).catch(() => undefined); }, []);
   useEffect(() => {
     // Technicians already on this booking are not "available" for their own slot, so list them too.
@@ -141,7 +143,15 @@ function AssignPanel({ booking, onDone, onError }: { booking: Detail; onDone: ()
       .then((r) => setTechs([...booking.assignments.filter((a) => a.IsActive).map((a) => ({ Id: a.TechnicianId, FullName: a.FullName, SupervisorId: undefined as number | null | undefined })), ...r.items]))
       .catch((e: Error) => onError(e.message));
   }, [booking, onError]);
+  // The manager only says how many technicians are needed; the system picks free ones: current crew first, then the supervisor's team, then the rest.
+  const pickIds = () => {
+    const current = new Set(booking.assignments.filter((a) => a.IsActive).map((a) => a.TechnicianId));
+    const rank = (x: { Id: number; SupervisorId?: number | null }) => (current.has(x.Id) ? 0 : supId && String(x.SupervisorId) === supId ? 1 : 2);
+    return [...techs].sort((x, y) => rank(x) - rank(y)).slice(0, count).map((x) => x.Id);
+  };
   const save = async () => {
+    const sel = pickIds();
+    if (sel.length < count) { onError(`${t('notEnoughTechs')} (${techs.length})`); return; }
     try { await api(`/bookings/${booking.Id}/assign`, { method: 'POST', body: { technicianIds: sel, supervisorId: supId ? Number(supId) : null } }); onDone(); } catch (e) { onError(e instanceof ApiError ? e.message : 'Error'); }
   };
   return (
@@ -151,13 +161,48 @@ function AssignPanel({ booking, onDone, onError }: { booking: Detail; onDone: ()
         <select className="rounded-lg border border-slate-300 bg-white px-2 py-1 dark:border-slate-600 dark:bg-slate-800" value={supId} onChange={(e) => setSupId(e.target.value)}>
           <option value="">—</option>{sups.map((x) => <option key={x.Id} value={x.Id}>{x.FullName}</option>)}
         </select>
-        {supId && <Button variant="ghost" onClick={() => setSel(techs.filter((x) => String(x.SupervisorId) === supId).map((x) => x.Id))}>{t('pickSupTeam')}</Button>}
       </div>
-      <div className="mb-1 font-semibold">{t('pickTechs')}</div>
-      <div className="flex flex-wrap gap-3">
-        {techs.map((x) => <label key={x.Id} className="flex items-center gap-1"><input type="checkbox" checked={sel.includes(x.Id)} onChange={(e) => setSel(e.target.checked ? [...sel, x.Id] : sel.filter((i) => i !== x.Id))} />{x.FullName}</label>)}
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="font-semibold" htmlFor="techCount">{t('techCount')}</label>
+        <input id="techCount" type="number" min={1} max={30} dir="ltr" value={count} onChange={(e) => setCount(Math.max(1, Math.min(30, Number(e.target.value) || 1)))} className="w-20 rounded-lg border border-slate-300 bg-white px-2 py-1 dark:border-slate-600 dark:bg-slate-800" />
+        <span className="text-xs text-slate-500">{t('availableNow')}: {techs.length}</span>
+        <Button disabled={techs.length === 0} onClick={save}>{t('apply')}</Button>
       </div>
-      <Button className="mt-2" disabled={sel.length === 0} onClick={save}>{t('apply')}</Button>
+    </div>
+  );
+}
+
+/** Notes for the crew's names, plus private copies of their residence IDs (shown only to staff who can assign). */
+function TeamPanel({ booking, onDone, onError }: { booking: Detail; onDone: () => void; onError: (m: string) => void }) {
+  const { t } = useI18n();
+  const [notes, setNotes] = useState(booking.TeamNotes ?? '');
+  const [busy, setBusy] = useState(false);
+  const saveNotes = async () => { try { await api(`/bookings/${booking.Id}/team-notes`, { method: 'PUT', body: { notes } }); onDone(); } catch { onError('Error'); } };
+  const upload = async (f?: File) => {
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { onError(t('imgTooBig')); return; }
+    setBusy(true);
+    try { await api(`/bookings/${booking.Id}/team-files`, { method: 'POST', body: { fileName: f.name, dataBase64: await fileToBase64(f) } }); onDone(); } catch (e) { onError(e instanceof ApiError ? e.message : 'Error'); } finally { setBusy(false); }
+  };
+  const remove = async (id: number) => { if (!window.confirm(t('deleteFileQ'))) return; try { await api(`/bookings/${booking.Id}/team-files/${id}`, { method: 'DELETE' }); onDone(); } catch { onError('Error'); } };
+  return (
+    <div className="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <div className="font-semibold">{t('teamNotes')}</div>
+      <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('teamNotesPh')} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800" />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="ghost" disabled={notes === (booking.TeamNotes ?? '')} onClick={() => void saveNotes()}>{t('save')}</Button>
+        <label className="cursor-pointer rounded-lg bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-cyan-800">{busy ? t('loading') : `📎 ${t('uploadIqama')}`}
+          <input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp,application/pdf" disabled={busy} onChange={(e) => { void upload(e.target.files?.[0]); e.target.value = ''; }} /></label>
+        <span className="text-xs text-slate-500">{t('iqamaPrivate')}</span>
+      </div>
+      {(booking.teamFiles ?? []).length > 0 && (
+        <ul className="flex flex-wrap gap-2">{booking.teamFiles!.map((f) => (
+          <li key={f.Id} className="flex items-center gap-2 rounded-lg bg-slate-100 px-2 py-1 text-sm dark:bg-slate-800">
+            <button type="button" className="max-w-[12rem] truncate underline" onClick={() => void openFile(`/bookings/${booking.Id}/team-files/${f.Id}`).catch(() => onError('Error'))}>{f.FileName}</button>
+            <button type="button" aria-label={t('removeImage')} className="text-red-600" onClick={() => void remove(f.Id)}>✕</button>
+          </li>))}
+        </ul>
+      )}
     </div>
   );
 }

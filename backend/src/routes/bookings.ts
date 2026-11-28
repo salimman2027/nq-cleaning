@@ -7,6 +7,7 @@ import { branchScope, requirePerm } from '../auth/middleware';
 import { backfillConfirmed } from '../services/requestSync';
 import { afterStatus } from '../services/ratings';
 import { config } from '../config';
+import { sniffMime } from '../lib/documents';
 import { calcTotals, lineTotal } from '../lib/pricing';
 import { REASON_REQUIRED, RELEASES_ASSIGNMENTS, STATUSES, canTransition, type BookingStatus } from '../lib/transitions';
 import { assertTechniciansFree } from '../services/scheduling';
@@ -106,12 +107,13 @@ bookingsRouter.get(
     );
     const scope = branchScope(u);
     if (!rows[0] || (scope !== null && rows[0].BranchId !== scope)) throw new HttpError(404, 'NOT_FOUND', 'Booking not found');
-    const [lines, assignments, history] = await Promise.all([
+    const [teamFiles, lines, assignments, history] = await Promise.all([
+      query(`SELECT Id, FileName, MimeType, SizeBytes, UploadedAt FROM BookingTeamFiles WHERE BookingId=@i ORDER BY Id`, { i: id }),
       query(`SELECT d.Id, d.ServiceId, s.Name AS ServiceName, d.Quantity, d.UnitPrice, d.LineTotal FROM BookingDetails d JOIN Services s ON s.Id=d.ServiceId WHERE d.BookingId=@i`, { i: id }),
       query(`SELECT a.Id, a.TechnicianId, t.FullName, a.StartAt, a.EndAt, a.IsActive FROM BookingAssignments a JOIN Technicians t ON t.Id=a.TechnicianId WHERE a.BookingId=@i ORDER BY a.Id`, { i: id }),
       query(`SELECT h.FromStatus, h.ToStatus, h.Reason, h.ChangedBy, u.FullName AS ChangedByName, h.ChangedAt FROM BookingStatusHistory h LEFT JOIN Users u ON u.Id=h.ChangedBy WHERE h.BookingId=@i ORDER BY h.Id`, { i: id }),
     ]);
-    res.json({ ...rows[0], lines, assignments, history });
+    res.json({ ...rows[0], lines, assignments, history, teamFiles });
   }),
 );
 
@@ -235,6 +237,67 @@ bookingsRouter.post(
       await query(`INSERT INTO AuditLogs (CompanyId, UserId, Action, Entity, EntityId, Details) VALUES (@c,@u,'booking.supervisor','Booking',@e,@d)`, { c: u.companyId, u: u.id, e: String(id), d: supervisorId === null ? 'none' : String(supervisorId) }, tx);
     });
     res.json({ id, supervisorId });
+  }),
+);
+
+/** Names of the crew (free text) for the job. */
+bookingsRouter.put(
+  '/:id/team-notes',
+  requirePerm('bookings.assign'),
+  h(async (req, res) => {
+    const id = parse(idParam, req.params.id);
+    const { notes } = parse(z.object({ notes: z.string().trim().max(1000) }), req.body);
+    const r = await query(`UPDATE Bookings SET TeamNotes=@n, UpdatedAt=SYSUTCDATETIME() OUTPUT inserted.Id WHERE Id=@i AND CompanyId=@c AND IsDeleted=0`, { n: notes || null, i: id, c: req.user!.companyId });
+    if (!r.length) throw new HttpError(404, 'NOT_FOUND', 'Booking not found');
+    res.json({ id });
+  }),
+);
+
+/** Private copies of the crew's residence IDs. Never public: only signed-in staff of this company with the assign permission. */
+bookingsRouter.post(
+  '/:id/team-files',
+  requirePerm('bookings.assign'),
+  h(async (req, res) => {
+    const id = parse(idParam, req.params.id);
+    const b = parse(z.object({ fileName: z.string().trim().min(1).max(200), dataBase64: z.string().min(4) }), req.body);
+    const bk = await query(`SELECT 1 AS x FROM Bookings WHERE Id=@i AND CompanyId=@c AND IsDeleted=0`, { i: id, c: req.user!.companyId });
+    if (!bk.length) throw new HttpError(404, 'NOT_FOUND', 'Booking not found');
+    const n = await query<{ N: number }>(`SELECT COUNT(*) AS N FROM BookingTeamFiles WHERE BookingId=@i`, { i: id });
+    if (Number(n[0].N) >= 12) throw new HttpError(409, 'TOO_MANY_FILES', 'At most 12 files per booking');
+    const data = Buffer.from(b.dataBase64.replace(/^data:[^,]*,/, ''), 'base64');
+    if (data.length > 2 * 1024 * 1024) throw new HttpError(413, 'FILE_TOO_LARGE', 'File must be 2 MB or smaller');
+    const mime = sniffMime(data);
+    if (!mime) throw new HttpError(415, 'UNSUPPORTED_FILE', 'Only PNG, JPG, WEBP or PDF');
+    const r = await query<{ Id: number }>(`INSERT INTO BookingTeamFiles (CompanyId, BookingId, FileName, MimeType, SizeBytes, Data, UploadedBy) OUTPUT inserted.Id VALUES (@c,@b,@f,@m,@s,@d,@u)`,
+      { c: req.user!.companyId, b: id, f: b.fileName, m: mime, s: data.length, d: data, u: req.user!.id });
+    res.status(201).json({ id: r[0].Id });
+  }),
+);
+
+bookingsRouter.get(
+  '/:id/team-files/:fid',
+  requirePerm('bookings.assign'),
+  h(async (req, res) => {
+    const id = parse(idParam, req.params.id);
+    const fid = parse(idParam, req.params.fid);
+    const f = (await query<Record<string, any>>(`SELECT FileName, MimeType, Data FROM BookingTeamFiles WHERE Id=@f AND BookingId=@b AND CompanyId=@c`, { f: fid, b: id, c: req.user!.companyId }))[0];
+    if (!f) throw new HttpError(404, 'NOT_FOUND', 'File not found');
+    res.setHeader('Content-Type', f.MimeType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(f.Data);
+  }),
+);
+
+bookingsRouter.delete(
+  '/:id/team-files/:fid',
+  requirePerm('bookings.assign'),
+  h(async (req, res) => {
+    const id = parse(idParam, req.params.id);
+    const fid = parse(idParam, req.params.fid);
+    await query(`DELETE FROM BookingTeamFiles WHERE Id=@f AND BookingId=@b AND CompanyId=@c`, { f: fid, b: id, c: req.user!.companyId });
+    res.json({ ok: true });
   }),
 );
 
