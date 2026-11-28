@@ -59,7 +59,7 @@ export default function Login() {
         <h1 className="text-2xl font-bold">{t('login')}</h1>
         {mode === 'email' ? (
           <>
-            <Field label={t('email')}><Input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+            <Field label={t('emailOrMobile')}><Input type="text" inputMode="email" autoCapitalize="none" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
             <Field label={t('password')}><PasswordInput autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
             <Remember />
           </>
