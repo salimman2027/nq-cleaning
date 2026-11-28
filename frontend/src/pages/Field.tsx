@@ -50,6 +50,7 @@ type Filter = '' | 'upcoming' | 'progress' | 'done' | 'late';
 /** The supervisor's home: today's numbers, then the jobs, with the next one to work on first. */
 export function FieldList() {
   const { t } = useI18n();
+  const { name, off } = useRules();
   const nav = useNavigate();
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [sum, setSum] = useState<Summary | null>(null);

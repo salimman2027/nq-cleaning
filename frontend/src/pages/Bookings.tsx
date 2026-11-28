@@ -9,7 +9,7 @@ import { Button, dateTime, ErrorBox, Field, Input, Modal, money, Select, Skeleto
 interface Row { Id: number; BookingNo: string; Status: string; StartAt: string; EndAt: string; Total: number; Paid: number; CustomerName: string; CustomerMobile: string; TechnicianCount: number }
 interface Detail extends Row {
   SupervisorId: number | null;
-  TeamNotes?: string | null; stageEvents?: { Id: number; Stage: 'depart' | 'arrive' | 'start' | 'progress' | 'finish' | 'cash' | 'next'; Note: string | null; Amount: number | null; Method?: string | null; CreatedAt: string; ByName: string | null; Files: { Id: number; Kind: string; FileName: string }[] }[]; teamFiles?: { Id: number; FileName: string }[];
+  TeamNotes?: string | null; stageLabels?: Record<string, string>; stageEvents?: { Id: number; Stage: 'depart' | 'arrive' | 'start' | 'progress' | 'finish' | 'cash' | 'next'; Note: string | null; Amount: number | null; Method?: string | null; CreatedAt: string; ByName: string | null; Files: { Id: number; Kind: string; FileName: string }[] }[]; teamFiles?: { Id: number; FileName: string }[];
   Notes: string | null; City: string | null; District: string | null; Street: string | null; MapUrl: string | null;
   lines: { Id: number; ServiceName: string; Quantity: number; UnitPrice: number; LineTotal: number }[];
   assignments: { Id: number; TechnicianId: number; FullName: string; IsActive: boolean }[];
