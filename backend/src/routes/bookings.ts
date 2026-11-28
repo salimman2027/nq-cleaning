@@ -8,6 +8,7 @@ import { backfillConfirmed } from '../services/requestSync';
 import { afterStatus } from '../services/ratings';
 import { config } from '../config';
 import { sniffMime } from '../lib/documents';
+import { stageFileForOffice } from './field';
 import { calcTotals, lineTotal } from '../lib/pricing';
 import { REASON_REQUIRED, RELEASES_ASSIGNMENTS, STATUSES, canTransition, type BookingStatus } from '../lib/transitions';
 import { assertTechniciansFree } from '../services/scheduling';
@@ -107,13 +108,14 @@ bookingsRouter.get(
     );
     const scope = branchScope(u);
     if (!rows[0] || (scope !== null && rows[0].BranchId !== scope)) throw new HttpError(404, 'NOT_FOUND', 'Booking not found');
-    const [teamFiles, lines, assignments, history] = await Promise.all([
+    const [stageEvents, teamFiles, lines, assignments, history] = await Promise.all([
+      query(`SELECT e.Id, e.Stage, e.Note, e.Amount, e.Latitude, e.Longitude, e.CreatedAt, u.FullName AS ByName, (SELECT f.Id, f.Kind, f.FileName FROM BookingStageFiles f WHERE f.EventId=e.Id FOR JSON PATH) AS FilesJson FROM BookingStageEvents e LEFT JOIN Users u ON u.Id=e.CreatedBy WHERE e.BookingId=@i ORDER BY e.Id`, { i: id }),
       query(`SELECT Id, FileName, MimeType, SizeBytes, UploadedAt FROM BookingTeamFiles WHERE BookingId=@i ORDER BY Id`, { i: id }),
       query(`SELECT d.Id, d.ServiceId, s.Name AS ServiceName, d.Quantity, d.UnitPrice, d.LineTotal FROM BookingDetails d JOIN Services s ON s.Id=d.ServiceId WHERE d.BookingId=@i`, { i: id }),
       query(`SELECT a.Id, a.TechnicianId, t.FullName, a.StartAt, a.EndAt, a.IsActive FROM BookingAssignments a JOIN Technicians t ON t.Id=a.TechnicianId WHERE a.BookingId=@i ORDER BY a.Id`, { i: id }),
       query(`SELECT h.FromStatus, h.ToStatus, h.Reason, h.ChangedBy, u.FullName AS ChangedByName, h.ChangedAt FROM BookingStatusHistory h LEFT JOIN Users u ON u.Id=h.ChangedBy WHERE h.BookingId=@i ORDER BY h.Id`, { i: id }),
     ]);
-    res.json({ ...rows[0], lines, assignments, history, teamFiles });
+    res.json({ ...rows[0], lines, assignments, history, teamFiles, stageEvents: stageEvents.map((e: Record<string, any>) => ({ ...e, FilesJson: undefined, Files: e.FilesJson ? JSON.parse(e.FilesJson) : [] })) });
   }),
 );
 
@@ -300,6 +302,11 @@ bookingsRouter.delete(
     res.json({ ok: true });
   }),
 );
+
+/** Photos and videos the supervisor recorded on site. Staff of this company with booking access only. */
+bookingsRouter.get('/:id/stage-files/:fid', requirePerm('bookings.view'), h(async (req, res) => {
+  await stageFileForOffice(req, res, parse(idParam, req.params.fid));
+}));
 
 const ASSIGNABLE: BookingStatus[] = ['new', 'confirmed', 'awaiting_assignment', 'assigned', 'redo'];
 

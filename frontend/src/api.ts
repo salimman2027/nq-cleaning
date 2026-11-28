@@ -81,6 +81,14 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
   return data as T;
 }
 
+/** Fetch a protected file as an object URL (for <img>/<video>); the caller revokes it. */
+export async function fileUrl(path: string): Promise<string> {
+  const t = read();
+  const res = await fetch(`${BASE}${path}`, { headers: t ? { Authorization: `Bearer ${t.accessToken}` } : {} });
+  if (!res.ok) throw new ApiError(res.status, 'ERROR', res.statusText);
+  return URL.createObjectURL(await res.blob());
+}
+
 /** Fetch a protected file (needs the bearer token, so it cannot be a plain link) and open it in a new tab. */
 export async function openFile(path: string): Promise<void> {
   const t = read();

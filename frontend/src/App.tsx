@@ -28,12 +28,14 @@ import Settings from './pages/Settings';
 import Ratings from './pages/Ratings';
 import Reports from './pages/Reports';
 import Rate from './pages/Rate';
+import { FieldJob, FieldList } from './pages/Field';
 
 const NAV: { to: string; key: Key; perm: string; icon: string }[] = [
   { to: '/app/review', key: 'review', perm: 'platform.companies.view', icon: '✅' },
   { to: '/app/monitor', key: 'monitor', perm: 'platform.companies.view', icon: '📊' },
   { to: '/app/complaints', key: 'complaints', perm: 'platform.companies.view', icon: '🚩' },
   { to: '/app/settings', key: 'settings', perm: 'platform.brand.manage', icon: '⚙' },
+  { to: '/app/field', key: 'fieldApp', perm: 'field.work', icon: '🧭' },
   { to: '/app/company', key: 'company', perm: 'company.profile.manage', icon: '🏢' },
   { to: '/app', key: 'dashboard', perm: 'dashboard.view', icon: '▦' },
   { to: '/app/requests', key: 'requests', perm: 'bookings.view', icon: '📥' },
@@ -103,6 +105,7 @@ function AppHome() {
   const { me, can } = useAuth();
   if (me && !me.IsPlatform && me.CompanyStatus !== 'approved') return <Navigate to="/app/company" replace />;
   if (can('platform.companies.view') && !can('dashboard.view')) return <Navigate to="/app/review" replace />;
+  if (can('field.work') && !can('dashboard.view') && !can('bookings.view')) return <Navigate to="/app/field" replace />;
   return <Dashboard />;
 }
 
@@ -120,6 +123,8 @@ export default function App() {
       <Route path="/login" element={me ? <Navigate to="/app" replace /> : <Login />} />
       <Route path="/app" element={<Layout />}>
         <Route index element={<AppHome />} />
+        <Route path="field" element={<FieldList />} />
+        <Route path="field/:id" element={<FieldJob />} />
         <Route path="company" element={<Company />} />
         <Route path="review" element={<Review />} />
         <Route path="monitor" element={<Monitor />} />

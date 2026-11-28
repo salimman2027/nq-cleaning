@@ -3,12 +3,13 @@ import { useSearchParams } from 'react-router-dom';
 import { api, ApiError, fileToBase64, openFile } from '../api';
 import { useAuth } from '../auth';
 import { STATUS_LABEL, useI18n } from '../i18n';
+import { StageLog } from './Field';
 import { Button, dateTime, ErrorBox, Field, Input, Modal, money, Select, Skeleton } from '../ui';
 
 interface Row { Id: number; BookingNo: string; Status: string; StartAt: string; EndAt: string; Total: number; Paid: number; CustomerName: string; CustomerMobile: string; TechnicianCount: number }
 interface Detail extends Row {
   SupervisorId: number | null;
-  TeamNotes?: string | null; teamFiles?: { Id: number; FileName: string }[];
+  TeamNotes?: string | null; stageEvents?: { Id: number; Stage: 'depart' | 'arrive' | 'start' | 'progress' | 'finish' | 'cash' | 'next'; Note: string | null; Amount: number | null; CreatedAt: string; ByName: string | null; Files: { Id: number; Kind: string; FileName: string }[] }[]; teamFiles?: { Id: number; FileName: string }[];
   Notes: string | null; City: string | null; District: string | null; Street: string | null; MapUrl: string | null;
   lines: { Id: number; ServiceName: string; Quantity: number; UnitPrice: number; LineTotal: number }[];
   assignments: { Id: number; TechnicianId: number; FullName: string; IsActive: boolean }[];
@@ -117,6 +118,7 @@ function BookingDetail({ id, onClose, onChanged }: { id: number; onClose: () => 
           {can('bookings.assign') && !['closed', 'cancelled'].includes(d.Status) && !['new', 'confirmed', 'awaiting_assignment', 'assigned', 'redo'].includes(d.Status) && <SupervisorPicker booking={d} onDone={() => { load(); onChanged(); }} onError={setErr} />}
           {can('bookings.assign') && ['new', 'confirmed', 'awaiting_assignment', 'assigned', 'redo'].includes(d.Status) && <AssignPanel booking={d} onDone={() => { load(); onChanged(); }} onError={setErr} />}
           {can('bookings.assign') && !['closed', 'cancelled'].includes(d.Status) && <TeamPanel booking={d} onDone={() => { load(); }} onError={setErr} />}
+          {(d.stageEvents?.length ?? 0) > 0 && <StageLog bookingId={d.Id} events={d.stageEvents!} />}
           {can('bookings.status') && NEXT[d.Status]?.length > 0 && (
             <div className="flex flex-wrap gap-2">{NEXT[d.Status].map((s) => <Button key={s} variant={s === 'cancelled' ? 'danger' : 'ghost'} onClick={() => change(s)}>{label(s)}</Button>)}</div>
           )}

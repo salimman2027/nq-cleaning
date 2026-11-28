@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../api';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
-import { Button, ErrorBox, Field, Input, Modal, Select, Skeleton } from '../ui';
+import { Button, ErrorBox, Field, Modal, Input, PasswordInput, Select, Skeleton } from '../ui';
 
 interface Tech { Id: number; Code: string; FullName: string; Status: string; SupervisorId: number | null }
-interface Sup { Id: number; FullName: string; Mobile: string | null; BranchId: number; MaxBookingsPerDay: number; technicians: Tech[] }
+interface Sup { Id: number; FullName: string; Mobile: string | null; BranchId: number; MaxBookingsPerDay: number; HasLogin?: boolean; technicians: Tech[] }
 
 /** Who supervises whom. Moving a technician changes their usual supervisor; each booking can still pick any supervisor. */
 export default function Supervisors() {
@@ -14,6 +14,7 @@ export default function Supervisors() {
   const [data, setData] = useState<{ items: Sup[]; unassigned: Tech[] } | null>(null);
   const [err, setErr] = useState('');
   const [adding, setAdding] = useState(false);
+  const [loginFor, setLoginFor] = useState<Sup | null>(null);
   const load = useCallback(() => { api<{ items: Sup[]; unassigned: Tech[] }>('/supervisors').then(setData).catch((e: Error) => setErr(e.message)); }, []);
   useEffect(load, [load]);
   const manage = can('technicians.manage');
@@ -35,7 +36,7 @@ export default function Supervisors() {
               <section key={s.Id} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
                 <div className="flex items-start justify-between gap-2">
                   <div><div className="font-bold">{s.FullName}</div><div className="text-xs text-slate-500" dir="ltr">{s.Mobile ?? '—'} · {t('maxPerDay')}: {s.MaxBookingsPerDay}</div></div>
-                  {manage && <Button variant="ghost" onClick={() => remove(s)}>{t('remove')}</Button>}
+                  {manage && <div className="flex gap-2"><Button variant="ghost" onClick={() => setLoginFor(s)}>{s.HasLogin ? t('resetLogin') : t('createLogin')}</Button><Button variant="ghost" onClick={() => remove(s)}>{t('remove')}</Button></div>}
                 </div>
                 <div className="mt-3 text-xs font-medium text-slate-500">{t('technicians')} ({s.technicians.length})</div>
                 <ul className="mt-1 space-y-1.5">
@@ -53,6 +54,7 @@ export default function Supervisors() {
           )}
         </>
       )}
+      {loginFor && <LoginModal sup={loginFor} onClose={() => setLoginFor(null)} onSaved={() => { setLoginFor(null); load(); }} />}
       {adding && <NewSup branchId={me?.BranchId ?? null} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load(); }} />}
     </div>
   );
@@ -78,6 +80,32 @@ function NewSup({ branchId, onClose, onSaved }: { branchId: number | null; onClo
         {err && <div className="sm:col-span-2"><ErrorBox message={err} /></div>}
         <div className="flex gap-2 sm:col-span-2"><Button type="submit">{t('save')}</Button><Button type="button" variant="ghost" onClick={onClose}>{t('cancel')}</Button></div>
       </form>
+    </Modal>
+  );
+}
+
+function LoginModal({ sup, onClose, onSaved }: { sup: Sup; onClose: () => void; onSaved: () => void }) {
+  const { t } = useI18n();
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState('');
+  const [done, setDone] = useState('');
+  const submit = async (e: FormEvent) => {
+    e.preventDefault(); setErr('');
+    try { const r = await api<{ username: string }>(`/supervisors/${sup.Id}/login`, { method: 'POST', body: { password: pw } }); setDone(r.username); }
+    catch (ex) { setErr(ex instanceof ApiError && ex.code === 'MOBILE_REQUIRED' ? t('needMobile') : ex instanceof ApiError ? ex.message : 'Error'); }
+  };
+  return (
+    <Modal title={`${sup.HasLogin ? t('resetLogin') : t('createLogin')}: ${sup.FullName}`} onClose={done ? onSaved : onClose}>
+      {done ? (
+        <div className="space-y-3"><p>{t('loginDone')} <b dir="ltr">{done}</b></p><Button onClick={onSaved}>{t('save')}</Button></div>
+      ) : (
+        <form onSubmit={submit} className="space-y-3">
+          <p className="text-sm text-slate-500">{t('loginHint')}</p>
+          {err && <ErrorBox message={err} />}
+          <Field label={t('password')}><PasswordInput required minLength={8} autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} /></Field>
+          <div className="flex gap-2"><Button type="submit">{t('save')}</Button><Button type="button" variant="ghost" onClick={onClose}>{t('cancel')}</Button></div>
+        </form>
+      )}
     </Modal>
   );
 }

@@ -53,7 +53,11 @@ authRouter.post(
   '/login',
   loginLimiter,
   h(async (req, res) => {
-    const body = parse(z.object({ email: z.string().email().max(256), password: z.string().min(1).max(200) }), req.body);
+    const raw = parse(z.object({ email: z.string().trim().min(3).max(256), password: z.string().min(1).max(200) }), req.body);
+    // Field supervisors sign in with their mobile number (stored as <mobile>@field.local).
+    const login = raw.email.toLowerCase();
+    const body = { password: raw.password, email: /^05\d{8}$/.test(login) ? `${login}@field.local` : login };
+    if (!body.email.includes('@')) throw new HttpError(401, 'BAD_CREDENTIALS', 'Incorrect e-mail or password');
     const users = await query<{
       Id: number; CompanyId: number; BranchId: number | null; FullName: string; PasswordHash: string;
     }>(

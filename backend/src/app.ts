@@ -13,6 +13,7 @@ import { authRouter } from './routes/auth';
 import { customersRouter } from './routes/customers';
 import { servicesRouter } from './routes/services';
 import { techniciansRouter } from './routes/technicians';
+import { fieldRouter } from './routes/field';
 import { bookingsRouter } from './routes/bookings';
 import { supervisorsRouter } from './routes/supervisors';
 import { financeRouter } from './routes/finance';
@@ -46,6 +47,7 @@ export function createApp(): express.Express {
   );
   // Document uploads travel as base64 JSON (5 MB file ≈ 6.7 MB), so this one route gets a larger limit.
   app.use('/api/company/documents', express.json({ limit: '8mb' }));
+  app.use('/api/field', express.json({ limit: '30mb' }));
   app.use('/api/bookings', express.json({ limit: '4mb' }));
   app.use('/api/technicians', express.json({ limit: '4mb' }));
   app.use('/api/media', express.json({ limit: '4mb' }));
@@ -68,6 +70,7 @@ export function createApp(): express.Express {
   api.use('/customers', authenticate, requireApprovedCompany, customersRouter);
   api.use('/services', authenticate, requireApprovedCompany, servicesRouter);
   api.use('/technicians', authenticate, requireApprovedCompany, techniciansRouter);
+  api.use('/field', authenticate, requireApprovedCompany, fieldRouter);
   api.use('/bookings', authenticate, requireApprovedCompany, bookingsRouter);
   api.use('/supervisors', authenticate, requireApprovedCompany, supervisorsRouter);
   api.use('/ratings', authenticate, requireApprovedCompany, ratingsRouter);

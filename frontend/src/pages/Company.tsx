@@ -1,5 +1,6 @@
 import AreasSection from './AreasSection';
 import ScheduleSection from './ScheduleSection';
+import FieldStagesSection from './FieldStagesSection';
 import type { ChangeEvent } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, fileToBase64, openFile } from '../api';
@@ -93,6 +94,7 @@ export default function Company() {
       {error && <ErrorBox message={error} />}
       {msg && <p className="text-sm text-green-700">{msg}</p>}
       <ScheduleSection canEdit={editable} />
+      <FieldStagesSection />
       <AreasSection canEdit={editable} onSaved={() => { api<Profile>('/company').then(apply).catch(() => undefined); }} />
       <section className="space-y-3 rounded-2xl bg-white p-4 shadow dark:bg-slate-900">
         <div><h2 className="font-semibold">{t('docs')}</h2><p className="text-xs text-slate-500">{t('docsHint')}</p></div>

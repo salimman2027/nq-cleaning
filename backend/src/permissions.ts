@@ -21,6 +21,7 @@ export const TENANT_PERMISSIONS = [
   'branches.all',
   'finance.view_cost',
   'company.profile.manage',
+  'field.work',
 ] as const;
 
 /** Permissions that only the platform operator's own staff can hold. Never granted to a tenant role. */
@@ -30,7 +31,7 @@ export const PERMISSIONS = [...TENANT_PERMISSIONS, ...PLATFORM_PERMISSIONS] as c
 export type Permission = (typeof PERMISSIONS)[number];
 
 const T = [...TENANT_PERMISSIONS] as string[];
-const OPS = T.filter((p) => p !== 'users.manage' && p !== 'company.profile.manage');
+const OPS = T.filter((p) => p !== 'users.manage' && p !== 'company.profile.manage' && p !== 'field.work');
 
 export const ROLE_DEFS: Record<string, string[]> = {
   'Company Owner': T,
@@ -40,6 +41,7 @@ export const ROLE_DEFS: Record<string, string[]> = {
   'Customer Service': ['customers.view', 'customers.create', 'customers.update', 'services.view', 'technicians.view', 'bookings.view', 'bookings.create', 'bookings.update', 'bookings.status', 'bookings.cancel'],
   'Booking Agent': ['customers.view', 'customers.create', 'services.view', 'technicians.view', 'bookings.view', 'bookings.create', 'bookings.update'],
   Supervisor: ['customers.view', 'technicians.view', 'bookings.view', 'bookings.assign', 'bookings.status', 'dashboard.view'],
+  'Field Supervisor': ['field.work'], // the supervisor's phone app: only their own jobs
   Technician: [], // technician endpoints (own tasks only) arrive with the mobile phase
   Accountant: ['customers.view', 'bookings.view', 'dashboard.view', 'finance.view_cost'],
   'Quality Officer': ['customers.view', 'bookings.view'],
