@@ -6,6 +6,7 @@ import { SectorIcon } from '../sectorIcons';
 import { ErrorBox, Modal, money, Skeleton } from '../ui';
 import { useShop } from '../shop';
 import ComplaintForm from './ComplaintForm';
+import { SlotPicker } from '../SlotPicker';
 import { AreaSelect, type ServiceArea } from '../AreaSelect';
 import { PublicShell } from './Home';
 
@@ -19,7 +20,7 @@ interface Store {
 function RequestForm({ store, color, picked }: { store: Store; color: string; picked: string }) {
   const { t } = useI18n();
   const { customer } = useShop();
-  const [f, setF] = useState({ serviceId: picked, customerName: customer?.name ?? '', phone: customer?.phone ?? '', address: '', date: '', period: 'morning', notes: '', city: '', district: '', lat: 0, lng: 0, photo: '' });
+  const [f, setF] = useState({ serviceId: picked, customerName: customer?.name ?? '', phone: customer?.phone ?? '', address: '', date: '', time: '', notes: '', city: '', district: '', lat: 0, lng: 0, photo: '' });
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
@@ -31,13 +32,13 @@ function RequestForm({ store, color, picked }: { store: Store; color: string; pi
     setPhotoBusy(true);
     try { const r = await api<{ url: string }>(`/market/companies/${store.slug}/photo`, { method: 'POST', body: { dataBase64: await fileToBase64(file) } }); setF((x) => ({ ...x, photo: r.url })); } catch { setError(t('imgFail')); } finally { setPhotoBusy(false); }
   };
-  const set = (k: 'serviceId' | 'customerName' | 'phone' | 'address' | 'date' | 'period' | 'notes') => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const set = (k: 'serviceId' | 'customerName' | 'phone' | 'address' | 'date' | 'notes') => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   useEffect(() => { if (picked) setF((x) => ({ ...x, serviceId: picked })); }, [picked]);
   const today = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setError('');
     try {
-      await api(`/market/companies/${store.slug}/requests`, { method: 'POST', customer: !!customer, body: { serviceId: Number(f.serviceId), customerName: f.customerName, phone: f.phone, city: f.city || undefined, district: f.district || undefined, address: f.address || undefined, date: f.date, period: f.period, lat: f.lat || undefined, lng: f.lng || undefined, photoUrl: f.photo || undefined, notes: f.notes || undefined } });
+      await api(`/market/companies/${store.slug}/requests`, { method: 'POST', customer: !!customer, body: { serviceId: Number(f.serviceId), customerName: f.customerName, phone: f.phone, city: f.city || undefined, district: f.district || undefined, address: f.address || undefined, date: f.date, time: f.time, lat: f.lat || undefined, lng: f.lng || undefined, photoUrl: f.photo || undefined, notes: f.notes || undefined } });
       setDone(true);
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Error'); } finally { setBusy(false); }
   };
@@ -51,11 +52,11 @@ function RequestForm({ store, color, picked }: { store: Store; color: string; pi
       <div className="grid gap-3 sm:grid-cols-2">
         <input required className={cls} placeholder={t('yourName')} value={f.customerName} onChange={set('customerName')} />
         <input required dir="ltr" inputMode="numeric" pattern="05[0-9]{8}" className={cls} placeholder={t('yourPhone')} value={f.phone} onChange={set('phone')} />
-        <input required type="date" min={today} className={cls} value={f.date} onChange={set('date')} aria-label={t('prefDate')} />
-        <select className={cls} value={f.period} onChange={set('period')} aria-label={t('period')}>{['morning', 'afternoon', 'evening'].map((p) => <option key={p} value={p}>{t(`p_${p}` as Key)}</option>)}</select>
+        <input required type="date" min={today} className={cls} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value, time: '' })} aria-label={t('prefDate')} />
       </div>
+      <SlotPicker slug={store.slug} date={f.date} value={f.time} onChange={(time) => setF((x) => ({ ...x, time }))} />
       <AreaSelect areas={store.areas} city={f.city} district={f.district} onChange={(city, district) => setF({ ...f, city, district })} className={cls} />
-      <input className={cls} placeholder={t('addressOpt')} value={f.address} onChange={set('address')} />
+      <textarea rows={2} className={cls} placeholder={t('addressOpt')} value={f.address} onChange={set('address')} />
       <div className="space-y-2">
         <button type="button" onClick={locate} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-medium dark:border-slate-600">📍 {f.lat ? t('locationSet') : t('shareLocation')}</button>
         <div className="flex items-center gap-3">
@@ -64,7 +65,7 @@ function RequestForm({ store, color, picked }: { store: Store; color: string; pi
         </div>
       </div>
       <input className={cls} placeholder={t('notesOpt')} value={f.notes} onChange={set('notes')} />
-      <button disabled={busy} className="tile w-full rounded-xl px-4 py-3 font-semibold text-white disabled:opacity-60" style={{ background: color }}>{t('sendRequest')}</button>
+      <button disabled={busy || !f.time} className="tile w-full rounded-xl px-4 py-3 font-semibold text-white disabled:opacity-60" style={{ background: color }}>{t('sendRequest')}</button>
     </form>
   );
 }

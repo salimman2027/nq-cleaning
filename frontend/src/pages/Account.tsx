@@ -8,7 +8,7 @@ import { Button, ErrorBox, Field, Input, PasswordInput, money, Skeleton } from '
 import ComplaintForm from './ComplaintForm';
 import { PublicShell } from './Home';
 
-interface Order { Unseen?: number; Id: number; Status: string; PaymentMethod: string; PaymentStatus: string; Total: number | null; PreferredDate: string; PreferredPeriod: string; CompanyName: string; Slug: string; CreatedAt: string; Items: { Name: string; Qty: number; UnitPrice: number }[] }
+interface Order { Unseen?: number; Id: number; Status: string; PaymentMethod: string; PaymentStatus: string; Total: number | null; PreferredDate: string; PreferredPeriod: string; PreferredTime?: string | null; CompanyName: string; Slug: string; CreatedAt: string; Items: { Name: string; Qty: number; UnitPrice: number }[] }
 
 export default function Account() {
   const { t, lang } = useI18n();

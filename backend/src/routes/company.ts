@@ -5,6 +5,7 @@ import { HttpError, h, parse } from '../errors';
 import { requirePerm, invalidateCompanyStatus } from '../auth/middleware';
 import { CR_RE, SLUG_RE, imageRef, VAT_RE, missingForReview, nationalAddressSchema } from '../lib/company';
 import { isCity } from '../lib/areas';
+import { loadSchedule } from '../services/slots';
 import { DOC_KINDS, MAX_DOC_BYTES, isCompleteAddress, mismatches, safeFileName, sniffMime, type DocKind, type Extracted } from '../lib/documents';
 import { extractFromFile, extractionEnabled } from '../services/extract';
 
@@ -196,6 +197,22 @@ export async function loadAreas(companyId: number): Promise<{ city: string; dist
   for (const r of rows) { if (!map.has(r.City)) map.set(r.City, []); if (r.District) map.get(r.City)!.push(r.District); }
   return [...map.entries()].map(([city, districts]) => ({ city, districts }));
 }
+
+/** Working hours: from/to, slot length, working days, and how many jobs one slot can take. */
+companyRouter.get('/schedule', h(async (req, res) => res.json(await loadSchedule(req.user!.companyId))));
+companyRouter.put('/schedule', requirePerm('company.profile.manage'), h(async (req, res) => {
+  const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+  const b = parse(z.object({ open: hhmm, close: hhmm, slotMinutes: z.number().int().min(30).max(480), days: z.string().regex(/^[0-6]{1,7}$/), maxPerSlot: z.number().int().min(1).max(100) }), req.body);
+  const m = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+  if (m(b.close) - m(b.open) < b.slotMinutes) throw new HttpError(400, 'BAD_SCHEDULE', 'Working hours must fit at least one slot');
+  const days = [...new Set(b.days.split(''))].sort().join('');
+  await query(
+    `MERGE CompanySchedule AS t USING (SELECT @c AS CompanyId) AS s ON t.CompanyId=s.CompanyId
+     WHEN MATCHED THEN UPDATE SET OpenTime=@o, CloseTime=@x, SlotMinutes=@m, Days=@d, MaxPerSlot=@p
+     WHEN NOT MATCHED THEN INSERT (CompanyId, OpenTime, CloseTime, SlotMinutes, Days, MaxPerSlot) VALUES (@c,@o,@x,@m,@d,@p);`,
+    { c: req.user!.companyId, o: b.open, x: b.close, m: b.slotMinutes, d: days, p: b.maxPerSlot });
+  res.json({ ...b, days });
+}));
 
 companyRouter.get('/areas', h(async (req, res) => res.json({ areas: await loadAreas(req.user!.companyId) })));
 

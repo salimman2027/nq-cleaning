@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import { optionalCustomerId } from './shop';
 import { checkArea } from '../services/areas';
 import { sniffMime } from '../lib/documents';
+import { assertSlot, periodOf, slotsWithAvailability } from '../services/slots';
 import { loadAreas } from './company';
 import { CITIES, DISTRICT_SUGGESTIONS } from '../lib/areas';
 import { isSaudiMobile } from '../lib/otp';
@@ -71,6 +72,15 @@ export const PAYMENT_METHODS = [{ code: 'cash', enabled: true }, { code: 'card',
 const requestLimiter = rateLimit({ windowMs: 10 * 60_000, limit: 8, standardHeaders: true, legacyHeaders: false, skip: () => config.env === 'test' });
 const riyadhToday = (): string => new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
 
+/** Time slots a company offers on a day, with which ones are still free. */
+marketRouter.get('/companies/:slug/slots', h(async (req, res) => {
+  const slug = parse(z.string().regex(/^[a-z0-9-]{3,60}$/), req.params.slug);
+  const date = parse(z.string().regex(/^\d{4}-\d{2}-\d{2}$/), req.query.date);
+  const c = (await query<{ Id: number }>(`SELECT Id FROM Companies WHERE Slug=@s AND Status='approved' AND IsDeleted=0 AND IsPlatform=0`, { s: slug }))[0];
+  if (!c) throw new HttpError(404, 'NOT_FOUND', 'Company not found');
+  res.json(await slotsWithAvailability(c.Id, date));
+}));
+
 /** A visitor attaches a photo of the place to a request. Images only, 2 MB, rate-limited; stored under the company being asked. */
 marketRouter.post('/companies/:slug/photo', requestLimiter, h(async (req, res) => {
   const slug = parse(z.string().regex(/^[a-z0-9-]{3,60}$/), req.params.slug);
@@ -96,7 +106,8 @@ marketRouter.post('/companies/:slug/requests', requestLimiter, h(async (req, res
     district: z.string().trim().max(80).optional(),
     address: z.string().trim().max(300).optional(),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    period: z.enum(['morning', 'afternoon', 'evening']),
+    period: z.enum(['morning', 'afternoon', 'evening']).optional(),
+    time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
     notes: z.string().trim().max(500).optional(),
     lat: z.number().min(-90).max(90).optional(),
     lng: z.number().min(-180).max(180).optional(),
@@ -110,10 +121,12 @@ marketRouter.post('/companies/:slug/requests', requestLimiter, h(async (req, res
   const svc = await query(`SELECT 1 AS x FROM Services WHERE Id=@i AND CompanyId=@c AND IsActive=1 AND IsDeleted=0`, { i: b.serviceId, c: c.Id });
   if (!svc.length) throw new HttpError(400, 'BAD_SERVICE', 'Unknown service');
   const area = await checkArea(c.Id, b.city, b.district);
+  if (!b.time && !b.period) throw new HttpError(400, 'VALIDATION_ERROR', 'Choose a time');
+  if (b.time) await assertSlot(c.Id, b.date, b.time);
   const r = await query<{ Id: number }>(
-    `INSERT INTO BookingRequests (CompanyId, ServiceId, CustomerName, Phone, Address, PreferredDate, PreferredPeriod, Notes, CustomerId, City, District, Latitude, Longitude, PhotoUrl)
-     OUTPUT inserted.Id VALUES (@c,@s,@n,@p,@a,@d,@pe,@no,@cu,@ci,@di,@la,@ln,@ph)`,
-    { la: b.lat ?? null, ln: b.lng ?? null, ph: b.photoUrl ?? null, ci: area.city, di: area.district, c: c.Id, s: b.serviceId, n: b.customerName, p: b.phone, a: b.address ?? null, d: b.date, pe: b.period, no: b.notes ?? null, cu: optionalCustomerId(req) },
+    `INSERT INTO BookingRequests (CompanyId, ServiceId, CustomerName, Phone, Address, PreferredDate, PreferredPeriod, Notes, CustomerId, City, District, Latitude, Longitude, PhotoUrl, PreferredTime)
+     OUTPUT inserted.Id VALUES (@c,@s,@n,@p,@a,@d,@pe,@no,@cu,@ci,@di,@la,@ln,@ph,@tm)`,
+    { tm: b.time ?? null, la: b.lat ?? null, ln: b.lng ?? null, ph: b.photoUrl ?? null, ci: area.city, di: area.district, c: c.Id, s: b.serviceId, n: b.customerName, p: b.phone, a: b.address ?? null, d: b.date, pe: b.time ? periodOf(b.time) : b.period!, no: b.notes ?? null, cu: optionalCustomerId(req) },
   );
   res.status(201).json({ id: r[0].Id, status: 'new' });
 }));

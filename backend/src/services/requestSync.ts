@@ -10,7 +10,7 @@ const START_HOUR: Record<string, number> = { morning: 9, afternoon: 13, evening:
 export async function bookFromRequest(companyId: number, requestId: number, userId: number | null): Promise<number | null> {
   return withTx(async (tx) => {
     const r = (await query<Record<string, any>>(
-      `SELECT r.Id, r.ServiceId, r.CustomerName, r.Phone, r.Address, r.PreferredDate, r.PreferredPeriod, r.Notes, r.Total, r.BookingId, r.City, r.District, s.DefaultMinutes
+      `SELECT r.Id, r.ServiceId, r.CustomerName, r.Phone, r.Address, r.PreferredDate, r.PreferredPeriod, r.PreferredTime, r.Notes, r.Total, r.BookingId, r.City, r.District, s.DefaultMinutes
          FROM BookingRequests r WITH (UPDLOCK) JOIN Services s ON s.Id=r.ServiceId WHERE r.Id=@i AND r.CompanyId=@c`, { i: requestId, c: companyId }, tx))[0];
     if (!r) return null;
     if (r.BookingId) return Number(r.BookingId);
@@ -31,7 +31,7 @@ export async function bookFromRequest(companyId: number, requestId: number, user
     if (!branch) branch = (await query<{ Id: number }>(`INSERT INTO Branches (CompanyId, Name) OUTPUT INSERTED.Id VALUES (@c, N'Main')`, { c: companyId }, tx))[0];
 
     const day = new Date(r.PreferredDate).toISOString().slice(0, 10);
-    const start = new Date(Date.parse(`${day}T00:00:00Z`) + (START_HOUR[r.PreferredPeriod] - 3) * 3600_000); // Riyadh = UTC+3
+    const start = new Date(Date.parse(`${day}T00:00:00Z`) + ((r.PreferredTime ? Number(String(r.PreferredTime).slice(0, 2)) * 60 + Number(String(r.PreferredTime).slice(3, 5)) : START_HOUR[r.PreferredPeriod] * 60) - 180) * 60_000); // Riyadh = UTC+3
     const end = new Date(start.getTime() + Math.max(60, Number(r.DefaultMinutes) || 120) * 60_000);
     const total = r.Total != null ? Number(r.Total) : 0;
     const b = (await query<{ Id: number }>(

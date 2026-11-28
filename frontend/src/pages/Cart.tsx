@@ -4,6 +4,7 @@ import { api, ApiError, fileToBase64 } from '../api';
 import { useI18n, type Key } from '../i18n';
 import { useShop } from '../shop';
 import { Button, ErrorBox, money } from '../ui';
+import { SlotPicker } from '../SlotPicker';
 import { AreaSelect, type ServiceArea } from '../AreaSelect';
 import { PublicShell } from './Home';
 
@@ -17,7 +18,7 @@ export default function Cart() {
   const [methods, setMethods] = useState<{ code: string; enabled: boolean }[]>(DEFAULT_METHODS);
   useEffect(() => { api<{ paymentMethods?: { code: string; enabled: boolean }[] }>('/market/config').then((r) => { if (r.paymentMethods) setMethods(r.paymentMethods); }).catch(() => undefined); }, []);
   const today = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
-  const [f, setF] = useState({ date: '', period: 'morning', address: '', notes: '', pay: 'cash', city: '', district: '', lat: 0, lng: 0, photo: '' });
+  const [f, setF] = useState({ date: '', time: '', address: '', notes: '', pay: 'cash', city: '', district: '', lat: 0, lng: 0, photo: '' });
   const [areas, setAreas] = useState<ServiceArea[]>([]);
   useEffect(() => { if (cart?.slug) api<{ areas?: ServiceArea[] }>(`/market/companies/${cart.slug}`).then((r) => setAreas(r.areas ?? [])).catch(() => undefined); }, [cart?.slug]);
   const [err, setErr] = useState('');
@@ -39,7 +40,7 @@ export default function Cart() {
     if (!cart) return;
     setBusy(true); setErr('');
     try {
-      const r = await api<{ id: number }>('/shop/orders', { method: 'POST', customer: true, body: { slug: cart.slug, items: cart.items.map((i) => ({ serviceId: i.serviceId, qty: i.qty })), date: f.date, period: f.period, lat: f.lat || undefined, lng: f.lng || undefined, photoUrl: f.photo || undefined, city: f.city || undefined, district: f.district || undefined, address: f.address, notes: f.notes || undefined, paymentMethod: f.pay } });
+      const r = await api<{ id: number }>('/shop/orders', { method: 'POST', customer: true, body: { slug: cart.slug, items: cart.items.map((i) => ({ serviceId: i.serviceId, qty: i.qty })), date: f.date, time: f.time, lat: f.lat || undefined, lng: f.lng || undefined, photoUrl: f.photo || undefined, city: f.city || undefined, district: f.district || undefined, address: f.address, notes: f.notes || undefined, paymentMethod: f.pay } });
       clear(); setDone(r.id);
     } catch (ex) { setErr(ex instanceof ApiError ? (ex.code === 'BAD_SERVICE' ? t('cartStale') : ex.code === 'BAD_DATE' ? t('badDate') : ex.code === 'OUT_OF_AREA' ? t('outOfArea') : t('err_VALIDATION_ERROR')) : 'Error'); } finally { setBusy(false); }
   };
@@ -76,10 +77,10 @@ export default function Cart() {
         <form onSubmit={submit} className="space-y-3 rounded-2xl bg-white p-4 shadow ring-1 ring-slate-200 md:col-span-2 dark:bg-slate-900 dark:ring-slate-800">
           <h2 className="font-semibold">{t('checkout')}</h2>
           {err && <ErrorBox message={err} />}
-          <input required type="date" min={today} className={cls} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} aria-label={t('prefDate')} />
-          <select className={cls} value={f.period} onChange={(e) => setF({ ...f, period: e.target.value })} aria-label={t('period')}>{['morning', 'afternoon', 'evening'].map((p) => <option key={p} value={p}>{t(`p_${p}` as Key)}</option>)}</select>
+          <input required type="date" min={today} className={cls} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value, time: '' })} aria-label={t('prefDate')} />
+          <SlotPicker slug={cart.slug} date={f.date} value={f.time} onChange={(time) => setF((x) => ({ ...x, time }))} />
           <AreaSelect areas={areas} city={f.city} district={f.district} onChange={(city, district) => setF({ ...f, city, district })} className={cls} />
-          <input required minLength={3} className={cls} placeholder={t('addressReq')} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
+          <textarea rows={2} required minLength={3} className={cls} placeholder={t('addressReq')} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
       <div className="space-y-2">
         <button type="button" onClick={locate} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-medium dark:border-slate-600">📍 {f.lat ? t('locationSet') : t('shareLocation')}</button>
         <div className="flex items-center gap-3">

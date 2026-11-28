@@ -4,7 +4,7 @@ import { useAuth } from '../auth';
 import { useI18n, type Key } from '../i18n';
 import { Button, ErrorBox, Modal, money, Skeleton } from '../ui';
 
-interface Req { Id: number; CustomerName: string; Phone: string; Address: string | null; PreferredDate: string; PreferredPeriod: string; Notes: string | null; Status: string; City: string | null; District: string | null; ServiceName: string; CreatedAt: string; PaymentStatus: string | null; Total: number | null; Latitude?: number | null; Longitude?: number | null; PhotoUrl?: string | null; Items: { Name: string; Qty: number; UnitPrice: number }[] }
+interface Req { Id: number; CustomerName: string; Phone: string; Address: string | null; PreferredDate: string; PreferredPeriod: string; PreferredTime?: string | null; Notes: string | null; Status: string; City: string | null; District: string | null; ServiceName: string; CreatedAt: string; PaymentStatus: string | null; Total: number | null; Latitude?: number | null; Longitude?: number | null; PhotoUrl?: string | null; Items: { Name: string; Qty: number; UnitPrice: number }[] }
 type Period = 'day' | 'week' | 'month' | 'all';
 const STATUSES = ['new', 'contacted', 'confirmed', 'cancelled'] as const;
 const riyadh = (iso: string) => new Date(Date.parse(iso) + 3 * 3600_000).toISOString().slice(0, 10);

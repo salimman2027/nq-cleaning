@@ -352,6 +352,25 @@ describe('marketplace onboarding and review', { skip: !enabled }, () => {
     assert.equal((await request(app).get('/api/market/config')).body.phoneVerification, true);
   });
 
+  test('working hours: slots follow the company schedule and fill up', async () => {
+    const { query } = await import('../db');
+    const svc = (await query<{ Id: number }>(`SELECT TOP 1 Id FROM Services WHERE CompanyId=@c AND IsDeleted=0`, { c: companyId }))[0].Id;
+    const day = new Date(Date.now() + 5 * 86400_000 + 3 * 3600_000).toISOString().slice(0, 10);
+    const dow = String(new Date(`${day}T00:00:00Z`).getUTCDay());
+    const put = await request(app).put('/api/company/schedule').set(auth(ownerToken)).send({ open: '09:00', close: '13:00', slotMinutes: 120, days: dow, maxPerSlot: 1 });
+    assert.equal(put.status, 200);
+    assert.equal((await request(app).put('/api/company/schedule').set(auth(ownerToken)).send({ open: '09:00', close: '10:00', slotMinutes: 120, days: dow, maxPerSlot: 1 })).status, 400);
+    const sl = await request(app).get(`/api/market/companies/clean-co/slots?date=${day}`);
+    assert.deepEqual(sl.body.slots.map((x: { time: string }) => x.time), ['09:00', '11:00']);
+    const body = { serviceId: svc, customerName: 'Sara', phone: '0551112299', date: day, city: 'الرياض', district: 'العليا' };
+    assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...body, time: '10:00' })).status, 400, 'not a slot');
+    assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...body, time: '09:00' })).status, 201);
+    assert.equal((await request(app).post('/api/market/companies/clean-co/requests').send({ ...body, time: '09:00' })).status, 409, 'slot full');
+    const again = await request(app).get(`/api/market/companies/clean-co/slots?date=${day}`);
+    assert.equal(again.body.slots[0].available, false);
+    assert.equal(again.body.slots[1].available, true);
+  });
+
   test('sections can be added and deleted; a section with services cannot', async () => {
     const put = (name: string) => request(app).put('/api/services/categories').set(auth(ownerToken)).send({ name });
     assert.equal((await put('قسم مؤقت')).status, 200);
